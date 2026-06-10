@@ -1,0 +1,23 @@
+# Verible SystemVerilog lint rule configuration.
+# One rule per line. `-rule` disables, `+rule` (or bare `rule`) enables,
+# `rule=param` configures. See: verible-verilog-lint --help_rules
+#
+# This is a pragmatic baseline for a small RTL skeleton — strict enough to
+# catch real style problems, relaxed where rules fight a 2-space indent project.
+
+# Enforce explicit, readable structure.
++explicit-parameter-storage-type
++parameter-name-style
++packed-dimensions-range-ordering
++no-trailing-spaces
++module-filename
++endif-comment
++generate-label
+
+# Naming conventions.
++module-parameter
++enum-name-style
+
+# Relax rules that are noisy for compact RTL or conflict with our formatting.
+-line-length
+-no-tabs

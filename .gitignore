@@ -1,0 +1,29 @@
+# Simulation build & run artifacts
+/sim/
+obj_dir/
+*.vcd
+*.fst
+*.fst.hier
+dump.*
+
+# Verilator / coverage data
+*.dat
+coverage.info
+htmlcov/
+.coverage
+.coverage.*
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+*.egg-info/
+
+# Editor / OS
+.DS_Store
+*.swp
+
+# Dev Container (local environment only)
+.devcontainer/

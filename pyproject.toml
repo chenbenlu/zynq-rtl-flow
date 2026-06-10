@@ -1,0 +1,26 @@
+[project]
+name = "zynq-cnn-sim"
+version = "0.1.0"
+description = "Sparse CNN FPGA accelerator — Verilator + cocotb simulation skeleton"
+requires-python = ">=3.10"
+dependencies = [
+    "cocotb>=2.0,<3.0",
+    "numpy>=1.26",
+]
+
+[project.optional-dependencies]
+# Installed in the toolchain image; kept separate so CI can skip if desired.
+test = [
+    "pytest>=8.0",
+    "pytest-cov>=5.0",
+]
+
+[tool.pytest.ini_options]
+# Testbench entry points live under tb/. cocotb's Python runner builds + runs
+# the Verilator simulation from inside these pytest functions.
+testpaths = ["tb"]
+python_files = ["test_*.py"]
+python_functions = ["test_*"]
+addopts = "-ra -v"
+# Keep cocotb's own logging readable when run under pytest.
+log_cli = false

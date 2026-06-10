@@ -1,0 +1,51 @@
+name: ci
+
+# Per-push / per-PR regression. Runs inside the GHCR toolchain image published
+# by build-image.yml (no rebuild) so it starts in seconds.
+#
+# BOOTSTRAP: this workflow needs ghcr.io/<owner>/zynq_cnn-dev:latest to exist.
+# Run build-image.yml once (push to docker/** or trigger it manually) first.
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  regress:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+    container:
+      image: ghcr.io/${{ github.repository_owner }}/zynq_cnn-dev:latest
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+      # Run as root inside the ephemeral CI container to avoid workspace UID
+      # friction with the checked-out files.
+      options: --user root
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Lint (Verilator + Verible)
+        run: make lint
+
+      - name: Format check (Verible)
+        run: make format-check
+
+      - name: Simulate (cocotb + Verilator)
+        run: make sim
+
+      - name: Coverage (Python + RTL)
+        run: make coverage
+
+      - name: Upload simulation artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sim-artifacts
+          path: |
+            sim/**/*.vcd
+            sim/**/*.fst
+            sim/coverage/**
+          if-no-files-found: ignore
