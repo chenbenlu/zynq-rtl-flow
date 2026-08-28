@@ -11,7 +11,15 @@ SIM_DIR     := sim
 COV_DIR     := $(SIM_DIR)/coverage
 COV_DAT     := $(shell find $(SIM_DIR) -name 'coverage.dat' 2>/dev/null)
 
-.PHONY: all lint sim wave coverage format format-check regress clean help
+# Sequential equivalence check. GOLDEN is the reference design (a git revision
+# or a directory containing rtl/); REVISED defaults to the working tree.
+GOLDEN      ?=
+REVISED     ?=
+SEC_ENGINE  ?= eqy
+SEC_DEPTH   ?= 20
+export GOLDEN REVISED SEC_ENGINE SEC_DEPTH
+
+.PHONY: all lint sim wave coverage sec format format-check regress clean help
 
 all: regress
 
@@ -32,7 +40,8 @@ coverage:
 	@mkdir -p $(COV_DIR)
 	SIM=$(SIM) $(PYTEST) tb \
 		--cov=tb --cov-report=term \
-		--cov-report=html:$(COV_DIR)/python
+		--cov-report=html:$(COV_DIR)/python \
+		--cov-report=lcov:$(COV_DIR)/python.info
 	@dat="$$(find $(SIM_DIR) -name 'coverage.dat' 2>/dev/null | head -1)"; \
 	if [[ -n "$$dat" ]]; then \
 		echo ">> RTL coverage from $$dat"; \
@@ -42,6 +51,19 @@ coverage:
 	else \
 		echo ">> No coverage.dat found (built with --coverage?). Skipping RTL coverage."; \
 	fi
+	@infos="$$(ls $(COV_DIR)/rtl.info $(COV_DIR)/python.info 2>/dev/null)"; \
+	if command -v genhtml >/dev/null 2>&1 && [[ -n "$$infos" ]]; then \
+		echo ">> genhtml unified HTML report"; \
+		genhtml --quiet --output-directory $(COV_DIR)/html \
+			--title "zynq_cnn coverage" --legend $$infos; \
+		echo ">> Open $(COV_DIR)/html/index.html"; \
+	elif ! command -v genhtml >/dev/null 2>&1; then \
+		echo ">> genhtml not found (install lcov) — skipping unified HTML report."; \
+	fi
+
+## sec: sequential equivalence check vs GOLDEN=<git-rev|dir> (see scripts/sec.sh)
+sec:
+	@bash scripts/sec.sh
 
 ## format: rewrite SystemVerilog in place with Verible
 format:

@@ -37,15 +37,18 @@ RUN git clone --depth 1 --branch "${VERILATOR_TAG}" \
 FROM ubuntu:${UBUNTU_VERSION} AS runtime
 
 ARG VERIBLE_TAG=v0.0-4063-gf831ec18
+ARG OSS_CAD_SUITE_TAG=2026-08-01
 ENV DEBIAN_FRONTEND=noninteractive
 
 # Runtime deps: g++/perl/make to compile the Verilator model per run, zlib for
-# FST traces, Python venv, GTKWave for waveforms, sudo for the dev user.
+# FST traces, Python venv, GTKWave for waveforms, lcov for genhtml coverage
+# reports, sudo for the dev user.
 RUN apt-get update && apt-get install -y --no-install-recommends \
         ca-certificates curl git make \
         g++ perl zlib1g ccache \
         python3 python3-venv python3-pip python3-dev \
         gtkwave \
+        lcov \
         sudo \
     && rm -rf /var/lib/apt/lists/*
 
@@ -60,6 +63,20 @@ RUN curl -fsSL \
     && tar -xzf /tmp/verible.tar.gz -C /opt/verible --strip-components=1 \
     && chmod -R a+rX /opt/verible \
     && rm /tmp/verible.tar.gz
+
+# oss-cad-suite: Yosys + eqy + sby + SMT/AIG solvers, for `make sec`
+# (sequential equivalence checking). Deliberately NOT added to PATH — its bin/
+# ships its own verilator and cocotb-config, which would shadow the pinned
+# Verilator v5.042 and break the cocotb flow. scripts/sec.sh picks it up via
+# OSS_CAD_SUITE instead.
+RUN curl -fsSL \
+        "https://github.com/YosysHQ/oss-cad-suite-build/releases/download/${OSS_CAD_SUITE_TAG}/oss-cad-suite-linux-x64-$(echo "${OSS_CAD_SUITE_TAG}" | tr -d '-').tgz" \
+        -o /tmp/oss-cad-suite.tgz \
+    && mkdir -p /opt/oss-cad-suite \
+    && tar -xzf /tmp/oss-cad-suite.tgz -C /opt/oss-cad-suite --strip-components=1 \
+    && chmod -R a+rX /opt/oss-cad-suite \
+    && rm /tmp/oss-cad-suite.tgz
+ENV OSS_CAD_SUITE=/opt/oss-cad-suite
 
 # Python virtualenv with cocotb 2.x + verification deps.
 # NOTE: keep these versions in sync with pyproject.toml (single source of truth).

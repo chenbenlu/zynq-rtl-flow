@@ -61,6 +61,56 @@ is the pytest entry point. It uses the cocotb 2.x Python test runner
   coroutine logic — the coroutines execute inside cocotb's embedded interpreter,
   not the pytest process. Treat it as a sanity check on the harness only.
 
+`make coverage` writes lcov reports to `sim/coverage/` — `rtl.info`
+(verilator_coverage) and `python.info` (pytest-cov) — plus HTML and an annotated
+RTL listing (`rtl_annotated/`). To see coverage **in the editor gutter**, the
+Dev Container ships the **Coverage Gutters** extension
+(`ryanluker.vscode-coverage-gutters`): run `make coverage`, then the
+*"Coverage Gutters: Watch"* command, and open `rtl/sparse_mac_pe.sv` — covered
+lines turn green, uncovered red. It is preconfigured to read both `.info` files
+(see `coverage-gutters.*` settings in `.devcontainer/devcontainer.json`).
+
+## Sequential equivalence checking (`make sec`)
+
+Simulation shows that a design passes the tests you thought to write. **SEC**
+proves something stronger: that two revisions of the RTL produce identical
+outputs for *every* input sequence. That is the check you want when a change is
+meant to be behaviour-preserving — retiming a pipeline, rewriting an operator,
+restructuring decode logic, or hand-optimising for the ZCU104's DSP48 slices.
+
+```bash
+make sec GOLDEN=HEAD                    # working tree vs last commit
+make sec GOLDEN=HEAD~3 REVISED=HEAD     # two commits
+make sec GOLDEN=../golden_rtl           # against an out-of-tree checkout
+```
+
+`GOLDEN` is the reference — a git revision or a directory containing `rtl/`.
+`REVISED` defaults to the working tree. Both sides are materialised under
+`sim/sec/{gold,gate}/` so the check never mutates your checkout.
+
+### Engines
+
+| `SEC_ENGINE` | Tool | Use when |
+| --- | --- | --- |
+| `eqy` (default) | Yosys `eqy` | The revision keeps the state encoding. Partitions both designs at matching register boundaries and discharges each to SAT — fast, and a failure names the exact partition that diverged. |
+| `miter` | Yosys `miter` + `sby` k-induction | The state encoding changed (added pipeline stage, re-encoded FSM). Proves an unbounded sequential miter; a failure drops a counterexample VCD in `sim/sec/work/engine_0/`. |
+
+`SEC_DEPTH` (default 20) bounds the SAT/BMC unrolling.
+
+The `miter` engine zero-initialises every register on both sides. Both DUT
+revisions reset synchronously with no RTL init value, so an unconstrained miter
+would start the two copies in *different* arbitrary states and fail at t=0 for
+reasons unrelated to equivalence. Zero-init pins them to a common start state,
+which is also how a Zynq FPGA brings registers up after configuration.
+
+### Why oss-cad-suite is not on `PATH`
+
+Its `bin/` ships its own `verilator` and `cocotb-config`, which would shadow the
+pinned Verilator v5.042 and silently change what `make sim` runs. The image sets
+`OSS_CAD_SUITE=/opt/oss-cad-suite` instead, and
+[scripts/sec.sh](../scripts/sec.sh) prepends it to `PATH` for its own process
+only.
+
 ## Extending the skeleton
 
 Deliberately **out of scope** for the foundation (add when actually needed):
@@ -82,7 +132,8 @@ Deliberately **out of scope** for the foundation (add when actually needed):
 2. Add `tb/<module>/tb_<module>.py` (coroutines) and
    `tb/<module>/test_<module>.py` (runner — copy the existing one, swap
    `HDL_TOPLEVEL`, `TEST_MODULE`, and `SOURCES`).
-3. Add the new sources to [scripts/lint.sh](../scripts/lint.sh).
+3. Add the new sources to [scripts/rtl_sources.sh](../scripts/rtl_sources.sh)
+   — the single list shared by `make lint` and `make sec`.
 4. `make regress`.
 
 `tb/conftest.py` auto-adds each `tb/<module>/` directory to `sys.path`, so
