@@ -1,6 +1,14 @@
 // Windows host: open via WSL2 (VS Code Remote-WSL, clone on the WSL ext4
 // filesystem). From a native Windows path ${localEnv:HOME} is unset, which
-// silently breaks the ~/.claude mount and the postCreateCommand symlink below.
+// silently breaks the Claude Code config mount and the postCreateCommand
+// symlink below.
+//
+// The mount source is a symlink that initializeCommand parks at a fixed path,
+// NOT "${localEnv:CLAUDE_CONFIG_DIR}" directly: Remote-WSL launches the VS Code
+// server through wsl.exe, which sources neither ~/.profile nor ~/.bashrc, so
+// CLAUDE_CONFIG_DIR is absent from the server's environment and would expand to
+// "" (an invalid mount). initializeCommand runs in a login shell, so it does see
+// the variable, and falls back to ~/.claude when it is unset.
 {
   "name": "zynq_cnn sparse-CNN sim",
 
@@ -21,8 +29,10 @@
     "CLAUDE_CONFIG_DIR": "/home/dev/.claude"
   },
 
+  "initializeCommand": "bash -lc 'd=\"$CLAUDE_CONFIG_DIR\"; [ -n \"$d\" ] || d=\"$HOME/.claude\"; mkdir -p \"$d\"; ln -sfn \"$d\" \"$HOME/.claude-devcontainer\"'",
+
   "mounts": [
-    "source=${localEnv:HOME}/.claude,target=/home/dev/.claude,type=bind,consistency=cached"
+    "source=${localEnv:HOME}/.claude-devcontainer,target=/home/dev/.claude,type=bind,consistency=cached"
   ],
 
   "customizations": {
