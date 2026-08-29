@@ -24,6 +24,3 @@ venv/
 # Editor / OS
 .DS_Store
 *.swp
-
-# Dev Container (local environment only)
-.devcontainer/

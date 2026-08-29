@@ -1,0 +1,76 @@
+// Windows host: open via WSL2 (VS Code Remote-WSL, clone on the WSL ext4
+// filesystem). From a native Windows path ${localEnv:HOME} is unset, which
+// silently breaks the ~/.claude mount and the postCreateCommand symlink below.
+{
+  "name": "zynq_cnn sparse-CNN sim",
+
+  // CI-published alternative: "image": "ghcr.io/chenbenlu/zynq_cnn-dev:latest"
+  "build": {
+    "dockerfile": "../docker/Dockerfile",
+    "context": "..",
+    "target": "runtime"
+  },
+
+  "remoteUser": "dev",
+
+  // Without an explicit workspaceMount the repo lands on /workspaces/<folder>,
+  // leaving workspaceFolder (the Dockerfile's WORKDIR) pointing at an empty dir.
+  "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind,consistency=cached",
+  "workspaceFolder": "/workspace",
+
+  // CLAUDE_CONFIG_DIR pulls ~/.claude.json into the bind mount below so it
+  // survives rebuilds. Bind-mounting that single file instead breaks the CLI:
+  // it rewrites the file with an atomic rename, which is EBUSY on a file mount.
+  "remoteEnv": {
+    "PATH": "/home/dev/.local/bin:${containerEnv:PATH}",
+    "CLAUDE_CONFIG_DIR": "/home/dev/.claude"
+  },
+
+  // Reuses the host's Claude login. Needs the container UID to match the host
+  // (docker/Dockerfile pins dev to 1000) or the 0600 credentials are unreadable.
+  "mounts": [
+    "source=${localEnv:HOME}/.claude,target=/home/dev/.claude,type=bind,consistency=cached"
+  ],
+
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "mshr-h.veriloghdl",
+        "eirikpre.systemverilog",
+        "wavetrace.wavetrace",
+        "teros-technology.teroshdl",
+        "ms-python.python",
+        "ms-python.vscode-pylance",
+        "ryanluker.vscode-coverage-gutters",
+        "anthropic.claude-code"
+      ],
+      "settings": {
+        "python.defaultInterpreterPath": "/opt/venv/bin/python",
+        "python.testing.pytestEnabled": true,
+        "python.testing.pytestArgs": ["tb"],
+        "files.insertFinalNewline": true,
+        "[systemverilog]": {
+          "editor.tabSize": 2
+        },
+        // Matches the lcov reports make coverage writes under sim/coverage/.
+        "coverage-gutters.coverageBaseDir": "sim/coverage",
+        "coverage-gutters.coverageFileNames": [
+          "rtl.info",
+          "python.info",
+          "lcov.info"
+        ],
+        "coverage-gutters.showLineCoverage": true,
+        "coverage-gutters.showRulerCoverage": true,
+        "coverage-gutters.showGutterCoverage": true
+      }
+    }
+  },
+
+  // The symlink makes the host home path resolve inside the container:
+  // ~/.claude/plugins/*.json store plugin locations as absolute host paths, so
+  // without it every plugin silently fails to load.
+  "postCreateCommand": "verilator --version && cocotb-config --version && verible-verilog-lint --version | head -1 && echo 'Toolchain OK' && if [ -d /home/dev/.claude ]; then curl -fsSL https://claude.ai/install.sh | bash; h='${localEnv:HOME}'; if [ -n \"$h\" ] && [ \"$h\" != /home/dev ] && [ ! -e \"$h\" ] && [ ! -L \"$h\" ]; then sudo ln -sfn /home/dev \"$h\"; fi; fi"
+
+  // X11 for GTKWave (make wave): add "containerEnv" with "DISPLAY":
+  // "${localEnv:DISPLAY}" plus a source=/tmp/.X11-unix,target=/tmp/.X11-unix mount.
+}
