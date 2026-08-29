@@ -22,16 +22,23 @@ accelerator on, not a finished design.
 
 ## Prerequisites
 
-- Docker
+- Docker **or** rootless Podman
 - (Recommended) VS Code + the **Dev Containers** extension
 
 ## Quickstart — Dev Container (recommended)
 
-1. Open this folder in VS Code.
-2. Run **"Dev Containers: Reopen in Container"**. The toolchain image builds
-   from [docker/Dockerfile](docker/Dockerfile) (first time only). On Linux, VS
-   Code auto-remaps the container user to your host UID, so files stay yours.
-3. In the integrated terminal:
+1. Log in to GHCR once -- the package is private:
+
+   ```bash
+   docker login ghcr.io -u <your-github-user>   # PAT with read:packages
+   ```
+
+2. Open this folder in VS Code.
+3. Run **"Dev Containers: Reopen in Container"**. It pulls
+   `ghcr.io/chenbenlu/zynq_cnn-dev:latest` (first time only) -- no local
+   compile. On Linux, VS Code auto-remaps the container user to your host UID,
+   so files stay yours.
+4. In the integrated terminal:
 
    ```bash
    make lint      # Verilator strict lint + Verible
@@ -41,11 +48,21 @@ accelerator on, not a finished design.
    make regress   # lint -> sim -> coverage (what CI runs)
    ```
 
-To use the CI-published image instead of building locally, edit
-[.devcontainer/devcontainer.json](.devcontainer/devcontainer.json) (swap `build`
-for the `ghcr.io/<owner>/zynq_cnn-dev:latest` `image` line).
+### Podman
 
-## Quickstart — raw Docker (no VS Code)
+The same config works unmodified. Point the extension at podman in your VS Code
+**user** settings (not the repo -- that would break Docker users):
+
+```jsonc
+"dev.containers.dockerPath": "podman"
+```
+
+Dev Containers then detects the podman variant and injects
+`--userns=keep-id --security-opt label=disable` itself (keep-id because this
+config sets a non-root `remoteUser`), so bind-mounted files stay owned by you.
+Nothing podman-specific belongs in `devcontainer.json`.
+
+## Quickstart — raw Docker / Podman (no VS Code)
 
 ```bash
 # Build the toolchain image
@@ -56,6 +73,14 @@ docker build -f docker/Dockerfile -t zynq_cnn-dev:latest .
 docker run --rm -v "$PWD":/workspace -w /workspace \
   --user "$(id -u):$(id -g)" -e HOME=/tmp \
   zynq_cnn-dev:latest make sim
+```
+
+With rootless podman, drop `--user` and let `keep-id` do the mapping:
+
+```bash
+podman build -f docker/Dockerfile -t zynq_cnn-dev:latest .
+podman run --rm --userns=keep-id -v "$PWD":/workspace -w /workspace \
+  -e HOME=/tmp zynq_cnn-dev:latest make sim
 ```
 
 ## Waveforms

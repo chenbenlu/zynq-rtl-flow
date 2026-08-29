@@ -8,8 +8,9 @@ all inside a pinned Docker toolchain image. See [README.md](README.md) and
 ## How to run things
 
 All commands assume you are inside the toolchain image / Dev Container (tools on
-PATH). From a host shell, prefix with the docker run wrapper from the README
-(remember `--user "$(id -u):$(id -g)"` on Linux so `sim/` stays user-owned).
+PATH). From a host shell, prefix with the docker/podman run wrapper from the
+README (`--user "$(id -u):$(id -g)"` on docker, `--userns=keep-id` on rootless
+podman, so `sim/` stays user-owned).
 
 ```bash
 make lint          # Verilator --lint-only -Wall + verible-verilog-lint
@@ -32,6 +33,10 @@ make clean
 - `scripts/` — lint / format / regress / wave / sec.
   `rtl_sources.sh` holds the RTL source list shared by lint and sec.
 - `docker/Dockerfile` — multi-stage; Verilator built from source.
+- `.devcontainer/devcontainer.json` — consumes the GHCR image (local `build`
+  block is commented out; building it needs ~8 GB RAM). Engine-agnostic: Dev
+  Containers adds `--userns=keep-id` itself when the engine is podman, so keep
+  podman-specific flags out of it.
 - `.github/workflows/` — `build-image.yml` (push to GHCR) + `ci.yml` (consume GHCR).
 
 ## Pinned tooling (keep in sync)
