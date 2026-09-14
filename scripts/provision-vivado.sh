@@ -142,14 +142,22 @@ main() {
   fi
 
   if [[ "${1:-}" == "--config-gen" ]]; then
-    local tmp
-    tmp="$(mktemp -d)"
-    "$xsetup" -b ConfigGen -c "$tmp/config.txt"
-    cp "$tmp/config.txt" "$CONFIG"
-    rm -rf "$tmp"
+    # ConfigGen prompts for a product and always writes to a fixed path; -c is
+    # for *reading* a config, not for choosing where to write one. Product 1 is
+    # Vitis, which bundles Vivado — both flows need it (see CONTEXT.md).
+    local generated="$HOME/.Xilinx/install_config.txt"
+    rm -f "$generated"
+    echo "${PRODUCT_CHOICE:-1}" | "$xsetup" -b ConfigGen >/dev/null 2>&1 || true
+
+    if [[ ! -s "$generated" ]]; then
+      echo "provision: ConfigGen did not produce $generated" >&2
+      echo "           run '$xsetup -b ConfigGen' by hand to see what it asked." >&2
+      exit 1
+    fi
+    cp "$generated" "$CONFIG"
     cat <<MSG
 
-Wrote $CONFIG
+Wrote $CONFIG  (product: $(grep -m1 '^Edition=' "$CONFIG" || echo 'see file'))
 
 Edit it before installing:
   - Destination  -> $XILINX_PREFIX
