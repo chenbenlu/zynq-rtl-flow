@@ -19,6 +19,7 @@ accelerator on, not a finished design.
 | Verible | v0.0-4063-gf831ec18 |
 | Python | 3.12 |
 | Base image | Ubuntu 24.04 |
+| Vivado / Vitis | 2026.1 (build host only) |
 
 ## Prerequisites
 

@@ -85,9 +85,11 @@ is the missing design, not the script.
 
 ## Pinned tooling (keep in sync)
 
-Vivado / Vitis **2025.1** (build host only; chosen because KV260's acceleration
-flow has a publicly verified path on it). Boards: **KV260** (ZU5EV, primary) and
-**ZCU104** (ZU7EV) — both covered by the free Vivado ML Standard Edition.
+Vivado / Vitis **2026.1** (build host only). Chosen because `Xilinx/kria-vitis-platforms`
+— the KV260 platform's upstream — tracks it on `main`; that repo stopped cutting release
+branches after 2023.2, so any older tools version means pinning an arbitrary commit.
+Boards: **KV260** (ZU5EV, primary) and **ZCU104** (ZU7EV) — both covered by the free
+Vivado ML Standard Edition.
 
 Verilator **v5.042** · cocotb **2.x** · Verible **v0.0-4063-gf831ec18** ·
 oss-cad-suite **2026-08-01** (Yosys/eqy/sby, for `make sec`) ·
@@ -119,9 +121,17 @@ Python **3.12** · Ubuntu **24.04**. Versions live in
 - **Vivado links against `libtinfo.so.5`**, which Ubuntu dropped after 20.04. The
   Vivado image symlinks it to `libtinfo.so.6`; without it the tools abort at startup
   with a shared-library error that looks nothing like a missing-package problem.
-- **The build host runs Ubuntu 20.04, which Vivado 2025.1 does not support.** This is
-  fine *only because* the tools run in a 24.04 container. Don't "simplify" by running
-  Vivado on the host.
+- **The build host runs Ubuntu 20.04, which Vivado 2026.1 does not support** (it wants
+  22.04.x or 24.04.x). This is fine *only because* the tools run in a 24.04 container.
+  Don't "simplify" by running Vivado on the host.
+- **KV260's five DPU example overlays were deleted in the 2026.1 migration** of
+  `kria-vitis-platforms` (smartcam, benchmark, aibox-reid, defect-detect,
+  nlp-smartvision — PR #290): sources, Makefile targets and `OVERLAY_LIST` are all gone,
+  and only the platform build remains. Tutorials written against 2025.1 and earlier will
+  send you looking for directories that no longer exist — that is not a broken install.
+  They are also the nearest worked example of packaging a bitstream as a firmware
+  overlay, so when that step gets written, read them out of the git history before
+  PR #290 rather than from a checkout.
 - **The KV260 is not on the lab network.** It hangs off the build host's second NIC on
   a private segment (ADR-0003) — the router has no free port, and the workstation VLAN
   blocks the server→workstation direction this flow needs. `192.168.100.x` on `RTXWS`

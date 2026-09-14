@@ -14,7 +14,7 @@ source flows/common/boards.sh
 source scripts/rtl_sources.sh
 
 XILINX_ROOT="${XILINX_ROOT:-/tools/Xilinx}"
-XILINX_VERSION="${XILINX_VERSION:-2025.1}"
+XILINX_VERSION="${XILINX_VERSION:-2026.1}"
 BOARD="${BOARD:-kv260}"
 BUILD_DIR="${BUILD_DIR:-$ROOT/build}"
 

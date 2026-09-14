@@ -17,7 +17,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-XILINX_VERSION="${XILINX_VERSION:-2025.1}"
+XILINX_VERSION="${XILINX_VERSION:-2026.1}"
 XILINX_PREFIX="${XILINX_PREFIX:-/home/ubuntu/disk/lab/xilinx}"
 INSTALLER_DIR="${INSTALLER_DIR:-/home/ubuntu/disk/lab/vivado-installer}"
 CONFIG="${CONFIG:-$ROOT/scripts/vivado-install-config.txt}"
@@ -36,7 +36,7 @@ provision-vivado.sh [--config-gen]
                  scripts/vivado-install-config.txt for you to edit, then exit
 
 Environment:
-  XILINX_VERSION   toolchain version            (default 2025.1)
+  XILINX_VERSION   toolchain version            (default 2026.1)
   XILINX_PREFIX    install destination          (default /home/ubuntu/disk/lab/xilinx)
   INSTALLER_DIR    where the downloaded archive is (default /home/ubuntu/disk/lab/vivado-installer)
 MSG
