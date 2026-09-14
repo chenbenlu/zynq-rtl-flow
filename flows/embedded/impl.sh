@@ -13,7 +13,10 @@ source "$(dirname "${BASH_SOURCE[0]}")/../common/env.sh"
 SYSTEM_TCL="$ROOT/flows/embedded/bd/system.tcl"
 XDC_DIR="$ROOT/flows/embedded/xdc/$BOARD"
 
+IMPL_TCL="$ROOT/flows/embedded/impl.tcl"
+
 missing=()
+[[ -f "$IMPL_TCL" ]] || missing+=("$IMPL_TCL — the implementation script, whose shape depends on the block design above")
 [[ -f "$SYSTEM_TCL" ]] || missing+=("$SYSTEM_TCL — the block design (Zynq PS + AXI interconnect + the accelerator IP)")
 [[ -d "$XDC_DIR" && -n "$(ls -A "$XDC_DIR" 2>/dev/null)" ]] || missing+=("$XDC_DIR/*.xdc — timing and pin constraints for $BOARD")
 grep -q 'axi' "${RTL_SOURCES[@]}" 2>/dev/null || missing+=("an AXI-wrapped top level in rtl/ — sparse_mac_pe is a bare PE with no bus interface")

@@ -13,7 +13,7 @@ KERNEL="${KERNEL:-sparse_conv}"
 SRC_DIR="$ROOT/flows/accel/hls/$KERNEL"
 OUT_DIR="${OUT_DIR:-$BUILD_DIR/$BOARD/accel/$KERNEL}"
 
-if [[ ! -d "$SRC_DIR" ]]; then
+if [[ ! -d "$SRC_DIR" || -z "$(ls -A "$SRC_DIR" 2>/dev/null | grep -v README)" ]]; then
   cat >&2 <<MSG
 hls: no kernel sources at $SRC_DIR
 
