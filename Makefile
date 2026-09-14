@@ -11,6 +11,14 @@ SIM_DIR     := sim
 COV_DIR     := $(SIM_DIR)/coverage
 COV_DAT     := $(shell find $(SIM_DIR) -name 'coverage.dat' 2>/dev/null)
 
+# Synthesis flows. BOARD selects the silicon (see flows/common/boards.sh);
+# KERNEL selects an HLS kernel in the acceleration flow. The flows run inside
+# the Vivado container — see scripts/vivado-run.sh.
+BOARD       ?= kv260
+KERNEL      ?= sparse_conv
+CLK_PERIOD  ?= 3.0
+export BOARD KERNEL CLK_PERIOD
+
 # Sequential equivalence check. GOLDEN is the reference design (a git revision
 # or a directory containing rtl/); REVISED defaults to the working tree.
 GOLDEN      ?=
@@ -19,7 +27,8 @@ SEC_ENGINE  ?= eqy
 SEC_DEPTH   ?= 20
 export GOLDEN REVISED SEC_ENGINE SEC_DEPTH
 
-.PHONY: all lint sim wave coverage sec format format-check regress clean help
+.PHONY: all lint sim wave coverage sec format format-check regress clean clean-synth help \
+        synth impl bitstream hls xclbin vivado-shell vivado-gui vivado-image
 
 all: regress
 
@@ -65,6 +74,44 @@ coverage:
 sec:
 	@bash scripts/sec.sh
 
+## --- Synthesis: embedded flow (hand-written RTL -> bitstream) ---
+
+## synth: out-of-context synthesis of one module — resource + timing baseline
+synth:
+	@bash flows/embedded/synth.sh
+
+## impl: place & route the full system design for BOARD
+impl:
+	@bash flows/embedded/impl.sh
+
+## bitstream: write the bitstream from the routed checkpoint
+bitstream:
+	@bash flows/embedded/bitstream.sh
+
+## --- Synthesis: acceleration flow (HLS kernel -> xclbin) ---
+
+## hls: compile the HLS kernel KERNEL into a .xo
+hls:
+	@bash flows/accel/hls.sh
+
+## xclbin: link KERNEL's .xo against the platform for BOARD
+xclbin:
+	@bash flows/accel/xclbin.sh
+
+## --- The Vivado container (run these on the build host, outside it) ---
+
+## vivado-image: build the Vivado container image
+vivado-image:
+	@bash scripts/vivado-run.sh build
+
+## vivado-shell: interactive shell in the Vivado container
+vivado-shell:
+	@bash scripts/vivado-run.sh
+
+## vivado-gui: launch the Vivado GUI on the build host's display
+vivado-gui:
+	@bash scripts/vivado-run.sh vivado
+
 ## format: rewrite SystemVerilog in place with Verible
 format:
 	@bash scripts/format.sh
@@ -82,6 +129,10 @@ clean:
 	rm -rf $(SIM_DIR) obj_dir
 	find . -name '__pycache__' -type d -prune -exec rm -rf {} +
 	find . -name '*.vcd' -o -name '*.fst' | xargs -r rm -f
+
+## clean-synth: remove synthesis + implementation artifacts
+clean-synth:
+	rm -rf build
 
 ## help: list targets
 help:

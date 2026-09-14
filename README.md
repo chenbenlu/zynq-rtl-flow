@@ -96,6 +96,70 @@ podman run --rm --userns=keep-id -v "$PWD":/workspace -w /workspace \
 To switch the dump to FST, pass `--trace-fst` in the runner `build_args`
 (see [tb/sparse_mac_pe/test_sparse_mac_pe.py](tb/sparse_mac_pe/test_sparse_mac_pe.py)).
 
+## Synthesis and implementation (build host only)
+
+Simulation runs anywhere; synthesis does not. The AMD toolchain lives on one
+machine — the **build host**, `RTXWS` — inside a second container that is
+separate from the simulation image and never published to a registry.
+
+Two flows run side by side, and they are not interchangeable:
+
+| Flow | Path | Artefact |
+|------|------|----------|
+| **Embedded** | hand-written SystemVerilog → Vivado → PS app over AXI | `.bit` / firmware overlay |
+| **Acceleration** | HLS C++ → `v++` → XRT on the board | `.xclbin` |
+
+See [CONTEXT.md](CONTEXT.md) for the vocabulary and
+[docs/adr/](docs/adr/) for the decisions behind the setup.
+
+### One-time setup on the build host
+
+```bash
+# 1. Download the AMD Unified Installer yourself (it needs a signed-in account)
+#    and drop it in /home/ubuntu/disk/lab/vivado-installer/
+bash scripts/provision-vivado.sh --config-gen   # generate + edit the config
+bash scripts/provision-vivado.sh                # install (hours)
+
+# 2. Build the container that runs it
+make vivado-image
+
+# 3. When the KV260 is cabled to the host's second NIC
+sudo bash scripts/provision-board-net.sh
+```
+
+The toolchain is installed to the host's persistent disk and mounted into the
+container rather than baked into the image — the reasoning, and what that costs,
+is in [ADR-0001](docs/adr/0001-vivado-installed-on-persistent-disk.md).
+
+### Running a flow
+
+```bash
+make vivado-shell            # a shell inside the Vivado container
+make synth                   # OOC baseline for sparse_mac_pe on kv260
+make synth BOARD=zcu104 CLK_PERIOD=2.5
+make impl BOARD=kv260        # needs the AXI-wrapped system design
+make hls KERNEL=sparse_conv
+make vivado-gui              # GUI on the build host's display
+```
+
+`make synth` is the target that works today. It synthesises one module
+out-of-context — no surrounding design, no I/O buffers — and reports what that
+module costs and how fast it runs. It is a measurement, not a step towards a
+bitstream. The targets beyond it depend on work that has not been done yet (an
+AXI wrapper, a block design, constraints, a platform) and each says exactly what
+it is waiting for.
+
+### Target boards
+
+| Board | Device | Programmed via |
+|-------|--------|----------------|
+| KV260 (primary) | ZU5EV | SD-card boot + firmware overlay from Linux |
+| ZCU104 | ZU7EV | traditional PetaLinux flow |
+
+Both devices are covered by the free Vivado ML Standard Edition; no licence
+purchase is needed. The KV260 is cabled directly to the build host's second NIC
+on a private segment — [ADR-0003](docs/adr/0003-kv260-direct-attached-to-build-host.md).
+
 ## Continuous Integration
 
 Two GitHub Actions workflows:
@@ -115,10 +179,13 @@ Two GitHub Actions workflows:
 ```
 rtl/        SystemVerilog sources (sparse_cnn_pkg, sparse_mac_pe)
 tb/         cocotb testbenches + pytest runners
-scripts/    lint / format / regress / wave helpers
-docker/     toolchain Dockerfile
-sim/        build + run artifacts, waveforms, coverage (gitignored)
-docs/       architecture notes & extension guide
+flows/      synthesis flows — common/ (board map), embedded/, accel/
+scripts/    lint / format / regress / wave + Vivado provisioning helpers
+docker/     Dockerfile (simulation) + vivado.Dockerfile (synthesis)
+sim/        simulation artifacts, waveforms, coverage (gitignored)
+build/      synthesis + implementation artifacts (gitignored)
+docs/       architecture notes, extension guide, ADRs
+CONTEXT.md  project glossary
 ```
 
 See [docs/architecture.md](docs/architecture.md) for the data flow and how to

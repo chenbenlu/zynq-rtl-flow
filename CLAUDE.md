@@ -12,6 +12,9 @@ PATH). From a host shell, prefix with the docker/podman run wrapper from the
 README (`--user "$(id -u):$(id -g)"` on docker, `--userns=keep-id` on rootless
 podman, so `sim/` stays user-owned).
 
+Simulation targets run in the toolchain image. **Synthesis targets run in a
+different container, on one machine only** — see "Two containers" below.
+
 ```bash
 make lint          # Verilator --lint-only -Wall + verible-verilog-lint
 make sim           # build + run cocotb suite via pytest (5 tests, must stay green)
@@ -22,7 +25,46 @@ make format-check  # CI-style: fail if unformatted
 make wave          # GTKWave on latest sim/**/dump.vcd (X11) — prefer WaveTrace/TerosHDL in-editor
 make regress       # lint -> sim -> coverage (matches CI)
 make clean
+
+make synth         # OOC synthesis of one module -> build/<board>/ooc/ (BOARD=, CLK_PERIOD=)
+make impl          # place & route the system design (not ready — see below)
+make hls           # Vitis HLS kernel -> .xo  (KERNEL=)
+make xclbin        # v++ link -> .xclbin
+make vivado-image  # build the Vivado container (run on the build host)
+make vivado-shell  # shell inside it
 ```
+
+## Two containers, and which is which
+
+- **Toolchain image** (`docker/Dockerfile`) — Verilator/cocotb/Verible. Self-contained,
+  published to GHCR, used by CI and the Dev Container. Everything under `make sim`.
+- **Vivado image** (`docker/vivado.Dockerfile`) — AMD toolchain *runtime deps only*.
+  The toolchain itself is bind-mounted from the build host's persistent disk, **not**
+  in the image (ADR-0001: a 100 GB image would sit on a 258 GB partition shared with
+  other people's services). Never pushed to a registry, never used by CI.
+
+**Do not merge them.** Adding Vivado to the toolchain image would make every CI
+lint/sim run pull tens of GB.
+
+The Vivado image runs only on the **build host** (`RTXWS`). `make synth` on any other
+machine fails with a message telling you so.
+
+## Synthesis flows
+
+Two flows run side by side and are deliberately kept apart — different tools,
+different artefacts, different notions of success. `CONTEXT.md` defines both;
+don't blur the terms.
+
+- `flows/embedded/` — hand-written SystemVerilog → Vivado → `.bit`
+- `flows/accel/` — HLS C++ → `v++` → `.xclbin`
+- `flows/common/boards.sh` — the board→part map, the single place to add a board
+
+`make synth` (out-of-context synthesis of one module) is the only synthesis target
+that works today. `impl`, `bitstream`, `hls` and `xclbin` are real scripts whose
+prerequisites do not exist yet — an AXI wrapper, a block design, constraints, an
+HLS kernel, a platform. Each one **reports exactly what is missing** rather than
+producing something broken. If you are asked to "make impl work", the actual task
+is the missing design, not the script.
 
 ## Layout
 
@@ -32,7 +74,9 @@ make clean
 - `tb/conftest.py` — adds each `tb/<dut>/` to `sys.path`.
 - `scripts/` — lint / format / regress / wave / sec.
   `rtl_sources.sh` holds the RTL source list shared by lint and sec.
+- `flows/` — synthesis flows: `common/` (board map, shared env), `embedded/`, `accel/`.
 - `docker/Dockerfile` — multi-stage; Verilator built from source.
+- `docker/vivado.Dockerfile` — AMD toolchain runtime deps (toolchain itself is mounted).
 - `.devcontainer/devcontainer.json` — consumes the GHCR image (local `build`
   block is commented out; building it needs ~8 GB RAM). Engine-agnostic: Dev
   Containers adds `--userns=keep-id` itself when the engine is podman, so keep
@@ -40,6 +84,10 @@ make clean
 - `.github/workflows/` — `build-image.yml` (push to GHCR) + `ci.yml` (consume GHCR).
 
 ## Pinned tooling (keep in sync)
+
+Vivado / Vitis **2025.1** (build host only; chosen because KV260's acceleration
+flow has a publicly verified path on it). Boards: **KV260** (ZU5EV, primary) and
+**ZCU104** (ZU7EV) — both covered by the free Vivado ML Standard Edition.
 
 Verilator **v5.042** · cocotb **2.x** · Verible **v0.0-4063-gf831ec18** ·
 oss-cad-suite **2026-08-01** (Yosys/eqy/sby, for `make sec`) ·
@@ -68,6 +116,16 @@ Python **3.12** · Ubuntu **24.04**. Versions live in
   `python3-dev` (cocotb embeds `libpython3.12.so`).
 - Verible tarball extracts `bin/` as `700`; Dockerfile `chmod -R a+rX` fixes it.
 - `ci.yml` requires the GHCR image to exist first — run `build-image.yml` once.
+- **Vivado links against `libtinfo.so.5`**, which Ubuntu dropped after 20.04. The
+  Vivado image symlinks it to `libtinfo.so.6`; without it the tools abort at startup
+  with a shared-library error that looks nothing like a missing-package problem.
+- **The build host runs Ubuntu 20.04, which Vivado 2025.1 does not support.** This is
+  fine *only because* the tools run in a 24.04 container. Don't "simplify" by running
+  Vivado on the host.
+- **The KV260 is not on the lab network.** It hangs off the build host's second NIC on
+  a private segment (ADR-0003) — the router has no free port, and the workstation VLAN
+  blocks the server→workstation direction this flow needs. `192.168.100.x` on `RTXWS`
+  is that link, not a stray config.
 - oss-cad-suite is intentionally **off** `PATH` (`OSS_CAD_SUITE` env only): its
   `bin/` ships its own `verilator`/`cocotb-config` that would shadow the pinned
   Verilator v5.042. `scripts/sec.sh` puts it on `PATH` for itself.
@@ -80,4 +138,6 @@ Issues live in GitHub Issues on `chenbenlu/zynq_cnn` (via the `gh` CLI). See `do
 
 ### Domain docs
 
-Single-context: `CONTEXT.md` + `docs/adr/` at the repo root. See `docs/agents/domain.md`.
+Single-context: [`CONTEXT.md`](CONTEXT.md) + [`docs/adr/`](docs/adr/) at the repo root.
+See `docs/agents/domain.md`. Three ADRs so far, all about the synthesis environment:
+persistent-disk install (0001), shared X socket (0002), direct-attached KV260 (0003).
