@@ -3,8 +3,9 @@
 # the selected board, then put the tools on PATH.
 #
 # The toolchain is NOT in the container image — it is bind-mounted from the
-# build host's persistent disk (see docs/adr/0001-...). XILINX_ROOT is where it
-# appears inside the container; the run wrapper is what mounts it there.
+# build host's persistent disk (see docs/adr/0001-...). XILINX_ROOT is both the
+# host path and the in-container path: they must match, because settings64.sh
+# sources its sub-scripts by absolute path. The run wrapper sets it.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -13,7 +14,7 @@ cd "$ROOT"
 source flows/common/boards.sh
 source scripts/rtl_sources.sh
 
-XILINX_ROOT="${XILINX_ROOT:-/tools/Xilinx}"
+XILINX_ROOT="${XILINX_ROOT:-/home/ubuntu/disk/lab/xilinx}"
 XILINX_VERSION="${XILINX_VERSION:-2026.1}"
 BOARD="${BOARD:-kv260}"
 BUILD_DIR="${BUILD_DIR:-$ROOT/build}"
@@ -21,8 +22,13 @@ BUILD_DIR="${BUILD_DIR:-$ROOT/build}"
 board_select "$BOARD"
 
 # Vivado's settings64.sh is not -u clean.
+#
+# 2026.1 nests as <prefix>/<version>/<Tool>/, where earlier releases used
+# <prefix>/<Tool>/<version>/. Both are checked so a machine carrying an older
+# install still works.
 vivado_env() {
-  local settings="$XILINX_ROOT/$1/$XILINX_VERSION/settings64.sh"
+  local settings="$XILINX_ROOT/$XILINX_VERSION/$1/settings64.sh"
+  [[ -f "$settings" ]] || settings="$XILINX_ROOT/$1/$XILINX_VERSION/settings64.sh"
   if [[ ! -f "$settings" ]]; then
     cat >&2 <<MSG
 $1 $XILINX_VERSION not found at $settings

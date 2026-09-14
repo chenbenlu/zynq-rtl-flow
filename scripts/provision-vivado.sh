@@ -94,6 +94,16 @@ MSG
   find "$INSTALLER_DIR" -maxdepth 3 -name xsetup -type f | head -1
 }
 
+# Where Vivado's settings64.sh lands. 2026.1 nests as <prefix>/<version>/<Tool>/;
+# earlier releases used <prefix>/<Tool>/<version>/. Echoes the path, or nothing.
+installed_settings() {
+  local a="$XILINX_PREFIX/$XILINX_VERSION/Vivado/settings64.sh"
+  local b="$XILINX_PREFIX/Vivado/$XILINX_VERSION/settings64.sh"
+  if   [[ -f "$a" ]]; then echo "$a"
+  elif [[ -f "$b" ]]; then echo "$b"
+  fi
+}
+
 # The web installer downloads content during the install, which needs a token
 # from an AMD account. Absent it, the install fails well into the run rather
 # than at the start.
@@ -175,6 +185,18 @@ MSG
     exit 0
   fi
 
+  # Re-running provisioning is how you check the environment, so it must not
+  # try to reinstall over a good install — xsetup refuses that with an error
+  # that reads like a failure.
+  local existing
+  existing="$(installed_settings)"
+  if [[ -n "$existing" && "${FORCE_REINSTALL:-0}" != "1" ]]; then
+    echo ">> ${XILINX_VERSION} is already installed: $existing"
+    echo ">> nothing to do. To add device families, use: \$xsetup -b Add"
+    echo ">> to install a second copy elsewhere, set XILINX_PREFIX."
+    exit 0
+  fi
+
   if [[ ! -f "$CONFIG" ]]; then
     echo "provision: no install config at $CONFIG" >&2
     echo "           run: bash scripts/provision-vivado.sh --config-gen" >&2
@@ -202,10 +224,11 @@ MSG
             --batch Install \
             --config "$CONFIG"
 
-  local settings="$XILINX_PREFIX/Vivado/$XILINX_VERSION/settings64.sh"
-  if [[ ! -f "$settings" ]]; then
-    echo "provision: install finished but $settings is missing —" >&2
-    echo "           check the Destination in $CONFIG." >&2
+  local settings
+  settings="$(installed_settings)"
+  if [[ -z "$settings" ]]; then
+    echo "provision: install finished but no Vivado settings64.sh appeared under" >&2
+    echo "           $XILINX_PREFIX — check the Destination in $CONFIG." >&2
     exit 1
   fi
   echo ">> installed. Vivado settings at $settings"

@@ -3,7 +3,9 @@
 # Vivado image — runtime dependencies for the AMD toolchain.
 #
 # The toolchain itself is NOT in this image. It is installed on the build host's
-# persistent disk and bind-mounted in at /tools/Xilinx; see
+# persistent disk and bind-mounted in at the same absolute path it was installed
+# to (settings64.sh sources its sub-scripts by absolute path, so the mount point
+# is not ours to choose); see
 # docs/adr/0001-vivado-installed-on-persistent-disk.md for why, and
 # scripts/provision-vivado.sh for how it gets there. This image therefore stays
 # around 1 GB instead of 100 GB, and is never pushed to a registry.
@@ -29,12 +31,19 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         libxft2 libxrandr2 libxcursor1 libxinerama1 libxss1 \
         libfontconfig1 libfreetype6 fonts-dejavu-core \
         libglib2.0-0 libgtk-3-0 libnss3 libasound2t64 \
+        libsecret-1-0 libyaml-0-2 libgdk-pixbuf-2.0-0 \
         libjpeg-turbo8 libpng16-16 \
         ocl-icd-libopencl1 opencl-headers \
         graphviz \
         python3 python3-venv \
         sudo \
     && rm -rf /var/lib/apt/lists/*
+
+# The runtime library set above is what the installed toolchain's own
+# scripts/installLibs.sh asks for (libsecret, libyaml, gdk-pixbuf, gtk, nss,
+# ncurses, tinfo, xss, asound). That script installs host packages as root; we
+# declare the same dependencies here instead, so the container stays the only
+# place they are needed and nothing is installed on the build host.
 
 # Vivado still links against libtinfo.so.5, which Ubuntu dropped after 20.04.
 # The ABI it uses is unchanged, so pointing the old soname at the current
@@ -56,10 +65,8 @@ RUN userdel --remove ubuntu 2>/dev/null || true \
     && echo "dev ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/dev \
     && chmod 0440 /etc/sudoers.d/dev
 
-# Where the bind-mounted toolchain appears. Nothing is installed here at build
-# time — the directory exists so the mount has somewhere to land.
-ENV XILINX_ROOT=/tools/Xilinx
-RUN mkdir -p ${XILINX_ROOT} && chown dev:dev ${XILINX_ROOT}
+# No mount point is created here: it is whatever absolute path the toolchain was
+# installed to on the host, and the run wrapper supplies it via XILINX_ROOT.
 
 USER dev
 WORKDIR /workspace

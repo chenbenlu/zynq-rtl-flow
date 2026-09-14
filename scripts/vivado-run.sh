@@ -32,8 +32,13 @@ if [[ ! -d "$XILINX_PREFIX" ]]; then
   exit 2
 fi
 
+# The toolchain is mounted at the SAME absolute path it was installed to, not a
+# tidier one: Vivado's settings64.sh sources its sub-scripts by absolute path,
+# baked in at install time. Mount it anywhere else and sourcing fails with a
+# "No such file or directory" naming a path that plainly exists on the host.
 args=(--rm -v "$ROOT":/workspace -w /workspace
-      -v "$XILINX_PREFIX":/tools/Xilinx:ro)
+      -v "$XILINX_PREFIX":"$XILINX_PREFIX":ro
+      -e "XILINX_ROOT=$XILINX_PREFIX")
 
 # Host networking: the KV260 sits on a private segment behind this host's second
 # NIC (docs/adr/0003-...), so the container needs the host's routing table to

@@ -132,6 +132,24 @@ Python **3.12** · Ubuntu **24.04**. Versions live in
   They are also the nearest worked example of packaging a bitstream as a firmware
   overlay, so when that step gets written, read them out of the git history before
   PR #290 rather than from a checkout.
+- **From 2026.1, Vivado will not launch without a license file — including the free
+  tier.** The old "Vivado ML Standard is free and needs no license" rule ended with
+  2025.x; 2026.1 uses tiers (Basic free w/ annual renewal, then Core/Pro/Enterprise/Gold)
+  and checks for a license at startup. The symptom is `ERROR: Vivado Design Suite cannot
+  be launched because a valid license was not found` **before any design is read**, so it
+  looks nothing like a device-support problem and cannot be diagnosed from the part name.
+  Which devices the free Basic tier covers is not the same list as 2025.x's Standard
+  Edition — verify a part empirically rather than citing the old list.
+- **Vivado's `settings64.sh` sources its sub-scripts by absolute path**, baked in at
+  install time. The container therefore mounts the toolchain at *the same* absolute path
+  it was installed to, not a tidy one like `/tools/Xilinx`. Mount it elsewhere and it
+  fails with "No such file or directory" naming a path that plainly exists on the host.
+- **2026.1 nests as `<prefix>/<version>/<Tool>/`**, where earlier releases used
+  `<prefix>/<Tool>/<version>/`. Scripts that hardcode the old shape find nothing and
+  report it as "the install went to the wrong place".
+- **2026.1 has no `vitis_hls` binary.** HLS is a mode of `v++` (`v++ -c --mode hls`),
+  driven by a config file, not the classic `open_project`/`csynth_design` Tcl. Tutorials
+  and older repos will hand you Tcl that has nothing to run it.
 - **The KV260 is not on the lab network.** It hangs off the build host's second NIC on
   a private segment (ADR-0003) — the router has no free port, and the workstation VLAN
   blocks the server→workstation direction this flow needs. `192.168.100.x` on `RTXWS`
