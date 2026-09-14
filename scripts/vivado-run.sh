@@ -60,8 +60,20 @@ fi
 
 # Vivado writes licence and preference state under $HOME; keep it on the host so
 # it survives the container, and out of the workspace so it never reaches git.
-mkdir -p "$XILINX_PREFIX/.home"
+mkdir -p "$XILINX_PREFIX/.home/.Xilinx"
 args+=(-v "$XILINX_PREFIX/.home":/home/dev -e HOME=/home/dev)
+
+# From 2026.1 Vivado refuses to launch without a licence, free tier included.
+# Pointed at explicitly rather than relying on the default search: the default
+# depends on $HOME resolving the way we expect inside the container, and a
+# licence that is merely *not found* fails identically to one that does not
+# cover the part — which is the harder question to be debugging.
+LICENSE_FILE="${LICENSE_FILE:-$XILINX_PREFIX/.home/.Xilinx/Xilinx.lic}"
+if [[ -f "$LICENSE_FILE" ]]; then
+  args+=(-e "XILINXD_LICENSE_FILE=$LICENSE_FILE")
+else
+  echo ">> warning: no licence at $LICENSE_FILE — Vivado will refuse to start" >&2
+fi
 
 if [[ -t 0 ]]; then args+=(-it); fi
 

@@ -132,6 +132,11 @@ Python **3.12** · Ubuntu **24.04**. Versions live in
   They are also the nearest worked example of packaging a bitstream as a firmware
   overlay, so when that step gets written, read them out of the git history before
   PR #290 rather than from a checkout.
+- **bash cannot export an array.** `export RTL_SOURCES="${RTL_SOURCES[*]}"` on the
+  array of the same name assigns to element 0 and exports nothing, so Vivado saw an
+  unset variable. The flow scripts flatten into a differently-named scalar
+  (`RTL_SOURCE_LIST`) of **absolute** paths — Vivado runs from the output directory,
+  so relative paths resolve against the wrong place.
 - **From 2026.1, Vivado will not launch without a license file — including the free
   tier.** The old "Vivado ML Standard is free and needs no license" rule ended with
   2025.x; 2026.1 uses tiers (Basic free w/ annual renewal, then Core/Pro/Enterprise/Gold)
@@ -139,7 +144,11 @@ Python **3.12** · Ubuntu **24.04**. Versions live in
   be launched because a valid license was not found` **before any design is read**, so it
   looks nothing like a device-support problem and cannot be diagnosed from the part name.
   Which devices the free Basic tier covers is not the same list as 2025.x's Standard
-  Edition — verify a part empirically rather than citing the old list.
+  Edition — verify a part empirically rather than citing the old list. **Measured
+  2026-09-14: the free Basic tier covers both `xck26` (KV260) and `xczu7ev` (ZCU104)**,
+  synthesis and implementation; the log grants licences per device, so
+  `Got license for feature 'Vivado_Synthesis' and/or device '<part>'` is the line that
+  settles it. The licence is node-locked to eth1's MAC and expires 2027-09-14.
 - **Vivado's `settings64.sh` sources its sub-scripts by absolute path**, baked in at
   install time. The container therefore mounts the toolchain at *the same* absolute path
   it was installed to, not a tidy one like `/tools/Xilinx`. Mount it elsewhere and it

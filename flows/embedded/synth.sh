@@ -13,7 +13,14 @@ OUT_DIR="${OUT_DIR:-$BUILD_DIR/$BOARD/ooc/$RTL_TOP}"
 CLK_PERIOD="${CLK_PERIOD:-3.0}"
 CLK_PORT="${CLK_PORT:-clk}"
 export RTL_TOP BOARD_PART OUT_DIR CLK_PERIOD CLK_PORT
-export RTL_SOURCES="${RTL_SOURCES[*]}"
+
+# bash cannot export an array, and Vivado runs from OUT_DIR rather than the repo
+# root, so the source list is flattened into a scalar of ABSOLUTE paths. Both
+# halves matter: exporting the array name silently passes only its first element,
+# and relative paths resolve against the wrong directory.
+abs_sources=()
+for src in "${RTL_SOURCES[@]}"; do abs_sources+=("$ROOT/$src"); done
+export RTL_SOURCE_LIST="${abs_sources[*]}"
 
 echo ">> OOC synth: $RTL_TOP on $BOARD ($BOARD_PART) @ ${CLK_PERIOD}ns"
 mkdir -p "$OUT_DIR"

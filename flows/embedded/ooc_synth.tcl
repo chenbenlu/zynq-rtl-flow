@@ -14,7 +14,7 @@ set part        $::env(BOARD_PART)
 set out_dir     $::env(OUT_DIR)
 set clk_period  $::env(CLK_PERIOD)
 set clk_port    $::env(CLK_PORT)
-set sources     [split $::env(RTL_SOURCES) " "]
+set sources     [split $::env(RTL_SOURCE_LIST) " "]
 
 file mkdir $out_dir
 

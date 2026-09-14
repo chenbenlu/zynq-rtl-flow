@@ -37,7 +37,9 @@ fi
 vivado_env Vivado
 OUT_DIR="${OUT_DIR:-$BUILD_DIR/$BOARD/impl}"
 export BOARD BOARD_PART BOARD_FILE OUT_DIR SYSTEM_TCL XDC_DIR
-export RTL_SOURCES="${RTL_SOURCES[*]}"
+abs_sources=()
+for src in "${RTL_SOURCES[@]}"; do abs_sources+=("$ROOT/$src"); done
+export RTL_SOURCE_LIST="${abs_sources[*]}"
 
 echo ">> impl: $BOARD ($BOARD_PART)"
 mkdir -p "$OUT_DIR"
