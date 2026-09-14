@@ -7,11 +7,18 @@
 # docker/vivado.Dockerfile and the install config it checks in, it is the
 # complete, re-runnable description of the environment.
 #
-#   bash scripts/provision-vivado.sh --config-gen   # first time: make a config
-#   bash scripts/provision-vivado.sh                # install
+#   bash scripts/provision-vivado.sh --auth         # first time: store an AMD token
+#   bash scripts/provision-vivado.sh --config-gen   # then: make a config
+#   bash scripts/provision-vivado.sh                # then: install
 #
-# The installer archive cannot be fetched automatically: AMD requires a signed-in
+# The installer itself cannot be fetched automatically: AMD requires a signed-in
 # account to download it. Place it yourself at $INSTALLER_DIR before running.
+#
+# This is the web installer, so the install downloads its content as it goes —
+# it pulls only the device families the config selects, rather than the ~90 GB
+# the offline package would cost to obtain 60 GB of tools. That needs an AMD
+# account at install time, which `--auth` handles: it stores a token under
+# $HOME/.Xilinx so no credentials ever enter this repo, the image, or a log.
 # =============================================================================
 set -euo pipefail
 
@@ -29,11 +36,14 @@ REQUIRED_GB="${REQUIRED_GB:-250}"
 
 usage() {
   cat <<'MSG'
-provision-vivado.sh [--config-gen]
+provision-vivado.sh [--auth | --config-gen]
 
-  (no args)      install the toolchain using scripts/vivado-install-config.txt
+  --auth         run the installer's AuthTokenGen: prompts for your AMD account
+                 and stores a token under $HOME/.Xilinx. Needed once per machine
+                 before a batch install can download anything.
   --config-gen   run the installer's config generator and write a template to
                  scripts/vivado-install-config.txt for you to edit, then exit
+  (no args)      install the toolchain using scripts/vivado-install-config.txt
 
 Environment:
   XILINX_VERSION   toolchain version            (default 2026.1)
@@ -44,21 +54,35 @@ MSG
 
 find_xsetup() {
   local extracted
-  extracted="$(find "$INSTALLER_DIR" -maxdepth 2 -name xsetup -type f 2>/dev/null | head -1)"
+  extracted="$(find "$INSTALLER_DIR" -maxdepth 3 -name xsetup -type f 2>/dev/null | head -1)"
   if [[ -n "$extracted" ]]; then
     echo "$extracted"
     return 0
   fi
 
-  local archive
-  archive="$(find "$INSTALLER_DIR" -maxdepth 1 -name '*.tar.gz' -o -maxdepth 1 -name '*.tar' 2>/dev/null | head -1)"
-  if [[ -z "$archive" ]]; then
+  # The web installer ships as a Makeself self-extracting .bin; the offline
+  # package as a tarball. Both unpack to a directory containing xsetup.
+  local bin archive
+  bin="$(find "$INSTALLER_DIR" -maxdepth 1 -name '*.bin' -type f 2>/dev/null | head -1)"
+  archive="$(find "$INSTALLER_DIR" -maxdepth 1 \( -name '*.tar.gz' -o -name '*.tar' \) 2>/dev/null | head -1)"
+
+  if [[ -n "$bin" ]]; then
+    echo ">> extracting $(basename "$bin")" >&2
+    chmod +x "$bin"
+    # --noexec unpacks without launching the GUI installer, which would fail on
+    # a headless host and is not what we want anyway.
+    "$bin" --noexec --target "$INSTALLER_DIR/extracted" >/dev/null
+  elif [[ -n "$archive" ]]; then
+    echo ">> extracting $(basename "$archive")" >&2
+    tar -xf "$archive" -C "$INSTALLER_DIR"
+  else
     cat >&2 <<MSG
 No installer found under $INSTALLER_DIR
 
-AMD requires a signed-in account to download the Unified Installer, so this
-script cannot fetch it. Download the ${XILINX_VERSION} "Unified Installer for
-Linux" (a self-extracting archive, roughly 90 GB) and place it at:
+AMD requires a signed-in account to download the installer, so this script
+cannot fetch it. Download the ${XILINX_VERSION} installer for Linux — either the
+web installer (a ~400 MB .bin) or the offline package (a ~90 GB tarball) — and
+place it at:
 
     $INSTALLER_DIR/
 
@@ -67,9 +91,16 @@ MSG
     return 2
   fi
 
-  echo ">> extracting $(basename "$archive")" >&2
-  tar -xf "$archive" -C "$INSTALLER_DIR"
-  find "$INSTALLER_DIR" -maxdepth 2 -name xsetup -type f | head -1
+  find "$INSTALLER_DIR" -maxdepth 3 -name xsetup -type f | head -1
+}
+
+# The web installer downloads content during the install, which needs a token
+# from an AMD account. Absent it, the install fails well into the run rather
+# than at the start.
+auth_token_present() {
+  local home_dir="${HOME:?}"
+  compgen -G "$home_dir/.Xilinx/wi_authentication_key" >/dev/null 2>&1 || \
+  compgen -G "$home_dir/.Xilinx/*auth*" >/dev/null 2>&1
 }
 
 check_space() {
@@ -95,6 +126,21 @@ main() {
   [[ -n "$xsetup" ]] || { echo "provision: could not locate xsetup" >&2; exit 2; }
   echo ">> installer: $xsetup"
 
+  if [[ "${1:-}" == "--auth" ]]; then
+    if [[ ! -t 0 ]]; then
+      echo "provision: --auth prompts for your AMD account; run it on a terminal." >&2
+      exit 2
+    fi
+    "$xsetup" -b AuthTokenGen
+    if auth_token_present; then
+      echo ">> token stored under $HOME/.Xilinx — it is not in this repo and must not be."
+    else
+      echo "provision: AuthTokenGen finished but no token is visible under $HOME/.Xilinx" >&2
+      exit 1
+    fi
+    exit 0
+  fi
+
   if [[ "${1:-}" == "--config-gen" ]]; then
     local tmp
     tmp="$(mktemp -d)"
@@ -107,9 +153,11 @@ Wrote $CONFIG
 
 Edit it before installing:
   - Destination  -> $XILINX_PREFIX
-  - Devices      -> keep Zynq UltraScale+ MPSoC, drop everything else. This is
-                    what keeps the install near 60 GB rather than over 100 GB;
-                    it covers both ZU5EV (KV260) and ZU7EV (ZCU104).
+  - Devices      -> keep Zynq UltraScale+ MPSoC, drop everything else. With the
+                    web installer this governs the download as well as the
+                    install, so it is the difference between pulling ~60 GB and
+                    pulling everything. It covers both ZU5EV (KV260) and
+                    ZU7EV (ZCU104).
   - Products     -> Vivado and Vitis are both needed: this project runs the
                     embedded and acceleration flows side by side (see CONTEXT.md).
 
@@ -125,9 +173,23 @@ MSG
     exit 2
   fi
 
+  if ! auth_token_present; then
+    cat >&2 <<MSG
+provision: no AMD authentication token under $HOME/.Xilinx
+
+The web installer downloads its content during the install and needs one. Run:
+
+    bash scripts/provision-vivado.sh --auth
+
+It prompts for your AMD account and stores a token; nothing is written to this
+repo. Without it the install fails partway through, not at the start.
+MSG
+    exit 2
+  fi
+
   check_space
 
-  echo ">> installing ${XILINX_VERSION} to $XILINX_PREFIX (this takes hours)"
+  echo ">> installing ${XILINX_VERSION} to $XILINX_PREFIX (downloads as it goes; hours)"
   "$xsetup" --agree XilinxEULA,3rdPartyEULA \
             --batch Install \
             --config "$CONFIG"

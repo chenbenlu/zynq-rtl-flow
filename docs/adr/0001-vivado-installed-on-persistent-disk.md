@@ -22,6 +22,18 @@ installation does not travel with the image. `/home/ubuntu/disk/lab/xilinx` is
 therefore load-bearing state that nothing in the container declares — the
 provisioning script is where it is written down.
 
+## The installer
+
+The toolchain is installed with AMD's **web installer** rather than the offline
+package. We only want one device family, so the offline route would mean
+downloading roughly 90 GB to install about 60 GB; the web installer pulls only
+what the config selects. The cost is that installing needs network access and an
+AMD account at install time, and that the install is not reproducible offline —
+if AMD withdraws a release, this script can no longer produce it. Credentials
+stay out of the repo: `xsetup -b AuthTokenGen` prompts once and stores a token
+under `$HOME/.Xilinx`, which the provisioning script requires before it will
+start an install.
+
 ## Considered options
 
 **Bake it into the image.** Rejected on the disk arithmetic above.

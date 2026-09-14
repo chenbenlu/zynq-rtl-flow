@@ -115,9 +115,14 @@ See [CONTEXT.md](CONTEXT.md) for the vocabulary and
 
 ### One-time setup on the build host
 
+Run these **as `ubuntu`** on the build host — the persistent disk is owned by
+that account, and its UID is what the container's user is aligned to.
+
 ```bash
-# 1. Download the AMD Unified Installer yourself (it needs a signed-in account)
-#    and drop it in /home/ubuntu/disk/lab/vivado-installer/
+# 1. Download the AMD installer yourself (it needs a signed-in account) and drop
+#    it in /home/ubuntu/disk/lab/vivado-installer/ — the ~400 MB web installer
+#    is the expected one; it pulls only the device families you select.
+bash scripts/provision-vivado.sh --auth         # store an AMD token, once
 bash scripts/provision-vivado.sh --config-gen   # generate + edit the config
 bash scripts/provision-vivado.sh                # install (hours)
 
