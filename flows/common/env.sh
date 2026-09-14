@@ -44,4 +44,10 @@ MSG
   # shellcheck disable=SC1090
   source "$settings"
   set -u
+
+  # settings64.sh does not put the bundled FlexLM tools on PATH, so xlicdiag —
+  # the thing you reach for when a licence check fails — cannot find lmutil and
+  # reports that instead of the licence problem you were diagnosing.
+  local flexlm="${settings%/settings64.sh}/bin/unwrapped/lnx64.o"
+  [[ -d "$flexlm" ]] && PATH="$PATH:$flexlm"
 }

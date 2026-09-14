@@ -50,6 +50,20 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # library is the accepted workaround; without it the tools abort at startup.
 RUN ln -sf /lib/x86_64-linux-gnu/libtinfo.so.6 /lib/x86_64-linux-gnu/libtinfo.so.5
 
+# The bundled FlexLM tools (lmutil, which the licence diagnostics shell out to)
+# are built against the LSB runtime and ask for the loader by its LSB name. It
+# is the ordinary loader under another name, and modern Ubuntu ships only the
+# ordinary one. Without this the binary reports "No such file or directory"
+# about *itself*, which is a thoroughly misleading way to say "missing loader".
+RUN ln -sf /lib64/ld-linux-x86-64.so.2 /lib64/ld-lsb-x86-64.so.3
+
+# Several AMD wrapper scripts have a #!/bin/sh shebang but use bash syntax.
+# Ubuntu points /bin/sh at dash, which rejects it with "Syntax error: Bad fd
+# number" — an error that says nothing about the actual cause.
+# dpkg-reconfigure honours the debconf priority rather than a preseed here, so
+# the link is set directly — deterministic, and visible to anyone reading this.
+RUN ln -sf /bin/bash /bin/sh
+
 # The installer and several tools misbehave under the C locale.
 RUN locale-gen en_US.UTF-8
 ENV LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8
