@@ -2,7 +2,7 @@
 # Out-of-context synthesis of a single RTL module — resource and timing
 # baseline. See flows/embedded/ooc_synth.tcl for what it actually measures.
 #
-#   make synth                              # sparse_mac_pe on kv260
+#   make synth                              # sparse_cnn_axi on kv260
 #   make synth BOARD=zcu104
 #   make synth RTL_TOP=sparse_mac_pe CLK_PERIOD=2.0
 
@@ -11,7 +11,7 @@ vivado_env Vivado
 
 OUT_DIR="${OUT_DIR:-$BUILD_DIR/$BOARD/ooc/$RTL_TOP}"
 CLK_PERIOD="${CLK_PERIOD:-3.0}"
-CLK_PORT="${CLK_PORT:-clk}"
+CLK_PORT="${CLK_PORT:-$(rtl_clk_port "$RTL_TOP")}"
 export RTL_TOP BOARD_PART OUT_DIR CLK_PERIOD CLK_PORT
 
 # bash cannot export an array, and Vivado runs from OUT_DIR rather than the repo

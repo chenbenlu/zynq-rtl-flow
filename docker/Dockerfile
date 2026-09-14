@@ -86,6 +86,7 @@ ENV PATH="${VIRTUAL_ENV}/bin:/opt/verilator/bin:/opt/verible/bin:${PATH}"
 RUN pip install --no-cache-dir --upgrade pip \
     && pip install --no-cache-dir \
         "cocotb>=2.0,<3.0" \
+        "cocotbext-axi>=0.1.25" \
         "numpy>=1.26" \
         "pytest>=8.0" \
         "pytest-cov>=5.0"

@@ -5,6 +5,7 @@ description = "Sparse CNN FPGA accelerator — Verilator + cocotb simulation ske
 requires-python = ">=3.10"
 dependencies = [
     "cocotb>=2.0,<3.0",
+    "cocotbext-axi>=0.1.25",
     "numpy>=1.26",
 ]
 

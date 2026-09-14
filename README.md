@@ -43,7 +43,7 @@ accelerator on, not a finished design.
 
    ```bash
    make lint      # Verilator strict lint + Verible
-   make sim       # build + run the cocotb suite (5 tests)
+   make sim       # build + run the cocotb suite (18 tests, 2 seams)
    make coverage  # Python + RTL coverage -> sim/coverage/
    make wave      # open the latest waveform (needs X11, see below)
    make regress   # lint -> sim -> coverage (what CI runs)
@@ -141,19 +141,29 @@ is in [ADR-0001](docs/adr/0001-vivado-installed-on-persistent-disk.md).
 
 ```bash
 make vivado-shell            # a shell inside the Vivado container
-make synth                   # OOC baseline for sparse_mac_pe on kv260
+make synth                   # OOC baseline for sparse_cnn_axi on kv260
+make synth RTL_TOP=sparse_mac_pe   # ... or for the bare PE
 make synth BOARD=zcu104 CLK_PERIOD=2.5
-make impl BOARD=kv260        # needs the AXI-wrapped system design
+make impl BOARD=kv260        # place & route the system design
+make bitstream BOARD=kv260   # .bit + .bin from the routed checkpoint
 make hls KERNEL=sparse_conv
 make vivado-gui              # GUI on the build host's display
 ```
 
-`make synth` is the target that works today. It synthesises one module
-out-of-context — no surrounding design, no I/O buffers — and reports what that
-module costs and how fast it runs. It is a measurement, not a step towards a
-bitstream. The targets beyond it depend on work that has not been done yet (an
-AXI wrapper, a block design, constraints, a platform) and each says exactly what
-it is waiting for.
+`make synth` synthesises one module out-of-context — no surrounding design, no
+I/O buffers — and reports what that module costs and how fast it runs. It is a
+measurement, not a step towards a bitstream.
+
+`make impl` builds the real thing: the block design in
+[flows/embedded/bd/system.tcl](flows/embedded/bd/system.tcl) — Zynq PS, AXI
+interconnect, a DMA feeding the accelerator's stream — placed and routed against
+the per-board PL clock target in [flows/common/boards.sh](flows/common/boards.sh),
+with a summary in `build/<board>/impl/impl_summary.txt`. `make bitstream` writes
+the `.bit` from the routed checkpoint.
+
+The acceleration-flow targets (`make hls`, `make xclbin`) still depend on work
+that has not been done yet — an HLS kernel and a platform — and each says
+exactly what it is waiting for.
 
 ### Target boards
 
@@ -183,16 +193,18 @@ Two GitHub Actions workflows:
 ## Project layout
 
 ```
-rtl/        SystemVerilog sources (sparse_cnn_pkg, sparse_mac_pe)
+rtl/        SystemVerilog sources (sparse_cnn_pkg, sparse_mac_pe, sparse_cnn_axi)
 tb/         cocotb testbenches + pytest runners
 flows/      synthesis flows — common/ (board map), embedded/, accel/
 scripts/    lint / format / regress / wave + Vivado provisioning helpers
 docker/     Dockerfile (simulation) + vivado.Dockerfile (synthesis)
 sim/        simulation artifacts, waveforms, coverage (gitignored)
 build/      synthesis + implementation artifacts (gitignored)
-docs/       architecture notes, extension guide, ADRs
+docs/       architecture notes, register map, extension guide, ADRs
 CONTEXT.md  project glossary
 ```
 
 See [docs/architecture.md](docs/architecture.md) for the data flow and how to
-extend the single PE into a PE array with AXI interfaces.
+extend the single PE into a PE array, and
+[docs/register-map.md](docs/register-map.md) for the interface a PS-side driver
+is written against.

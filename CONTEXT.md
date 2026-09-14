@@ -19,9 +19,28 @@ Suppressing a multiply-accumulate when an operand is zero. The property that
 makes this accelerator *sparse* rather than a plain systolic array.
 _Avoid_: sparsity handling, pruning, gating
 
+**AXI wrapper**:
+`sparse_cnn_axi`, the top level that makes the PE addressable by the PS: an
+AXI4-Lite slave for control, status and results, and an AXI4-Stream slave for
+operands. It instantiates the PE unmodified and adds no arithmetic of its own.
+_Avoid_: AXI shim, bus adapter, IP core
+
+**Tile**:
+One run of operand pairs through the accelerator, from a START to the stream
+beat carrying `tlast`. The unit the accumulator and the zero-skip count are
+reported over, and the unit a PS-side driver submits.
+_Avoid_: batch, job, transfer, frame
+
+**Register map**:
+The AXI4-Lite offsets, fields and semantics a PS-side driver is written
+against, specified in [docs/register-map.md](docs/register-map.md). The
+document is the specification; the RTL and its testbench both answer to it.
+_Avoid_: CSR layout, register file, control interface
+
 **Golden model**:
-The numpy reference implementation in `tb/<dut>/tb_<dut>.py` that a cocotb
-testbench compares the DUT against.
+The numpy reference implementation in `tb/model/sparse_mac_model.py` that every
+cocotb testbench compares its DUT against. One definition, imported by each
+seam, never copied.
 _Avoid_: reference design, oracle, expected model
 
 **Sequential equivalence (SEC)**:

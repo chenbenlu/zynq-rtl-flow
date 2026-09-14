@@ -1,12 +1,8 @@
-"""pytest entry point for the sparse_mac_pe cocotb suite.
+"""pytest entry point for the sparse_cnn_axi cocotb suite.
 
-Uses the cocotb 2.x Python test runner to build the DUT with Verilator and run
-the coroutine tests in ``tb_sparse_mac_pe``. Run with::
-
-    pytest tb/sparse_mac_pe/test_sparse_mac_pe.py
-    SIM=verilator pytest tb            # explicit simulator
-
-Build/run artifacts (and the waveform) land under ``sim/sparse_mac_pe``.
+Same shape as the sparse_mac_pe runner: build the wrapper with Verilator via
+the cocotb 2.x Python runner, then run the coroutine tests in
+``tb_sparse_cnn_axi``. Artifacts land under ``sim/sparse_cnn_axi``.
 """
 
 from __future__ import annotations
@@ -21,23 +17,22 @@ THIS_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = THIS_DIR.parents[1]
 RTL_DIR = PROJECT_ROOT / "rtl"
 MODEL_DIR = PROJECT_ROOT / "tb" / "model"
-SIM_BUILD = PROJECT_ROOT / "sim" / "sparse_mac_pe"
+SIM_BUILD = PROJECT_ROOT / "sim" / "sparse_cnn_axi"
 
-HDL_TOPLEVEL = "sparse_mac_pe"
-TEST_MODULE = "tb_sparse_mac_pe"
+HDL_TOPLEVEL = "sparse_cnn_axi"
+TEST_MODULE = "tb_sparse_cnn_axi"
 
 SOURCES = [
     RTL_DIR / "sparse_cnn_pkg.sv",
     RTL_DIR / "sparse_mac_pe.sv",
+    RTL_DIR / "sparse_cnn_axi.sv",
 ]
 
 
-def test_sparse_mac_pe() -> None:
+def test_sparse_cnn_axi() -> None:
     sim = os.getenv("SIM", "verilator")
     runner = get_runner(sim)
 
-    # cocotb 2.x needs --timing for its scheduler; --coverage emits coverage.dat
-    # at end of simulation; -Wall keeps the elaboration lint-clean.
     runner.build(
         sources=SOURCES,
         hdl_toplevel=HDL_TOPLEVEL,
@@ -47,7 +42,6 @@ def test_sparse_mac_pe() -> None:
         always=True,
     )
 
-    # Make the coroutine module importable by the cocotb-spawned simulator.
     os.environ["PYTHONPATH"] = os.pathsep.join(
         [str(THIS_DIR), str(MODEL_DIR), os.environ.get("PYTHONPATH", "")]
     ).rstrip(os.pathsep)
@@ -61,6 +55,5 @@ def test_sparse_mac_pe() -> None:
 
 
 if __name__ == "__main__":
-    # Allow running the flow directly without pytest.
-    test_sparse_mac_pe()
+    test_sparse_cnn_axi()
     sys.exit(0)

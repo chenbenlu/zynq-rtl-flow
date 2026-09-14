@@ -17,7 +17,7 @@ different container, on one machine only** — see "Two containers" below.
 
 ```bash
 make lint          # Verilator --lint-only -Wall + verible-verilog-lint
-make sim           # build + run cocotb suite via pytest (5 tests, must stay green)
+make sim           # build + run cocotb suite via pytest (2 seams, 18 tests, must stay green)
 make coverage      # Python (pytest-cov) + RTL (verilator_coverage) -> sim/coverage/
 make sec GOLDEN=HEAD   # sequential equivalence check vs a reference revision
 make format        # verible-verilog-format --inplace
@@ -27,7 +27,7 @@ make regress       # lint -> sim -> coverage (matches CI)
 make clean
 
 make synth         # OOC synthesis of one module -> build/<board>/ooc/ (BOARD=, CLK_PERIOD=)
-make impl          # place & route the system design (not ready — see below)
+make impl          # place & route the system design -> build/<board>/impl/
 make hls           # Vitis HLS kernel -> .xo  (KERNEL=)
 make xclbin        # v++ link -> .xclbin
 make vivado-image  # build the Vivado container (run on the build host)
@@ -59,22 +59,31 @@ don't blur the terms.
 - `flows/accel/` — HLS C++ → `v++` → `.xclbin`
 - `flows/common/boards.sh` — the board→part map, the single place to add a board
 
-`make synth` (out-of-context synthesis of one module) is the only synthesis target
-that works today. `impl`, `bitstream`, `hls` and `xclbin` are real scripts whose
-prerequisites do not exist yet — an AXI wrapper, a block design, constraints, an
-HLS kernel, a platform. Each one **reports exactly what is missing** rather than
-producing something broken. If you are asked to "make impl work", the actual task
-is the missing design, not the script.
+`make synth` (out-of-context synthesis of one module) and `make impl` /
+`make bitstream` (the full system design: Zynq PS + interconnect + DMA + the
+AXI-wrapped accelerator) both run today. The acceleration-flow targets `hls` and
+`xclbin` are real scripts whose prerequisites — an HLS kernel, a platform — do
+not exist yet; each **reports exactly what is missing** rather than producing
+something broken. If you are asked to "make xclbin work", the actual task is the
+missing kernel, not the script.
 
 ## Layout
 
-- `rtl/` — SystemVerilog. `sparse_cnn_pkg.sv` (widths) + `sparse_mac_pe.sv` (DUT).
-- `tb/<dut>/tb_<dut>.py` — cocotb coroutines + numpy golden model.
+- `rtl/` — SystemVerilog. `sparse_cnn_pkg.sv` (widths), `sparse_mac_pe.sv` (the
+  PE) and `sparse_cnn_axi.sv` (the AXI-wrapped top level, and the default
+  `RTL_TOP`).
+- `tb/<dut>/tb_<dut>.py` — cocotb coroutines.
 - `tb/<dut>/test_<dut>.py` — pytest entry; cocotb 2.x `cocotb_tools.runner`.
+- `tb/model/sparse_mac_model.py` — the numpy golden model and operand generator,
+  shared by both seams. One definition of correct behaviour, imported, never copied.
 - `tb/conftest.py` — adds each `tb/<dut>/` to `sys.path`.
 - `scripts/` — lint / format / regress / wave / sec.
-  `rtl_sources.sh` holds the RTL source list shared by lint and sec.
-- `flows/` — synthesis flows: `common/` (board map, shared env), `embedded/`, `accel/`.
+  `rtl_sources.sh` holds the RTL source list shared by lint, sec and the synthesis flows.
+- `flows/` — synthesis flows: `common/` (board map incl. per-board PL clock
+  target, shared env), `embedded/` (`bd/system.tcl` block design, `impl.tcl`,
+  `xdc/<board>/`), `accel/`.
+- `docs/register-map.md` — the AXI4-Lite map. It is the specification, not a
+  description: the wrapper's tests check the RTL against it.
 - `docker/Dockerfile` — multi-stage; Verilator built from source.
 - `docker/vivado.Dockerfile` — AMD toolchain runtime deps (toolchain itself is mounted).
 - `.devcontainer/devcontainer.json` — consumes the GHCR image (local `build`
@@ -91,7 +100,7 @@ branches after 2023.2, so any older tools version means pinning an arbitrary com
 Boards: **KV260** (ZU5EV, primary) and **ZCU104** (ZU7EV) — both covered by the free
 Vivado ML Standard Edition.
 
-Verilator **v5.042** · cocotb **2.x** · Verible **v0.0-4063-gf831ec18** ·
+Verilator **v5.042** · cocotb **2.x** · cocotbext-axi **0.1.25+** · Verible **v0.0-4063-gf831ec18** ·
 oss-cad-suite **2026-08-01** (Yosys/eqy/sby, for `make sec`) ·
 Python **3.12** · Ubuntu **24.04**. Versions live in
 [docker/Dockerfile](docker/Dockerfile); Python deps mirror
@@ -101,8 +110,14 @@ Python **3.12** · Ubuntu **24.04**. Versions live in
 
 - 2-space indent for SystemVerilog (see `.editorconfig`, `.verible.lint.rules`).
 - New DUT: add RTL, copy a `tb/<dut>/` pair, add sources to
-  `scripts/rtl_sources.sh` (single list, used by lint and sec), then
-  `make regress`. RTL must be `-Wall` clean.
+  `scripts/rtl_sources.sh` (single list, used by lint, sec and both synthesis
+  flows), then `make regress`. RTL must be `-Wall` clean.
+- Verible's lint config wants **localparams in CamelCase** (`RegCtrl`), while
+  module parameters stay ALL_CAPS (`DATA_W`). The two rules have different
+  regexes; `make lint` is the arbiter.
+- Tests live at RTL module boundaries and drive only top-level ports. The
+  wrapper's tests never reach inside to the PE — the contract it presents to the
+  PS is the point, and an internal probe would pass with that contract broken.
 - Behaviour-preserving RTL change (retiming, operator rewrite): prove it with
   `make sec GOLDEN=HEAD` rather than trusting the directed tests.
   `SEC_ENGINE=miter` when the state encoding changed.
@@ -118,6 +133,11 @@ Python **3.12** · Ubuntu **24.04**. Versions live in
   `python3-dev` (cocotb embeds `libpython3.12.so`).
 - Verible tarball extracts `bin/` as `700`; Dockerfile `chmod -R a+rX` fixes it.
 - `ci.yml` requires the GHCR image to exist first — run `build-image.yml` once.
+- **Adding a Python dependency makes CI red for one push.** `ci.yml` pulls
+  `zynq_cnn-dev:latest` from GHCR; `build-image.yml` rebuilds it on the same
+  push (`docker/**` + `pyproject.toml` are its triggers) but the two run
+  concurrently, so the regression runs against the image *without* the new
+  package. Let `build-image.yml` finish, then re-run `ci.yml`.
 - **Vivado links against `libtinfo.so.5`**, which Ubuntu dropped after 20.04. The
   Vivado image symlinks it to `libtinfo.so.6`; without it the tools abort at startup
   with a shared-library error that looks nothing like a missing-package problem.

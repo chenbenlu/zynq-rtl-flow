@@ -1,9 +1,10 @@
 """cocotb tests for sparse_mac_pe.
 
 Drives streams of (weight, activation) pairs with controllable sparsity and
-checks the DUT's accumulator and zero-skip counter against a numpy golden
-model. Written against the cocotb 2.x API; value access goes through small
-helpers so we don't depend on one exact accessor name.
+checks the DUT's accumulator and zero-skip counter against the shared numpy
+golden model in ``tb/model/sparse_mac_model.py``. Written against the cocotb 2.x
+API; value access goes through small helpers so we don't depend on one exact
+accessor name.
 """
 
 from __future__ import annotations
@@ -13,14 +14,17 @@ import numpy as np
 from cocotb.clock import Clock
 from cocotb.triggers import RisingEdge, Timer
 
-# Must match sparse_cnn_pkg defaults (the DUT is elaborated with these).
-DATA_W = 8
-ACC_W = 32
-CLK_PERIOD_NS = 10
+from sparse_mac_model import (
+    ACC_W,
+    DATA_MASK,
+    DATA_MAX,
+    DATA_MIN,
+    gen_pairs,
+    golden,
+    to_signed,
+)
 
-DATA_MIN = -(1 << (DATA_W - 1))      # -128
-DATA_MAX = (1 << (DATA_W - 1)) - 1   #  127
-DATA_MASK = (1 << DATA_W) - 1
+CLK_PERIOD_NS = 10
 
 
 # --- value helpers -----------------------------------------------------------
@@ -34,15 +38,8 @@ def _read_raw(signal) -> int:
     return int(value)
 
 
-def _to_signed(raw: int, width: int) -> int:
-    raw &= (1 << width) - 1
-    if raw & (1 << (width - 1)):
-        raw -= 1 << width
-    return raw
-
-
 def read_acc(dut) -> int:
-    return _to_signed(_read_raw(dut.acc), ACC_W)
+    return to_signed(_read_raw(dut.acc), ACC_W)
 
 
 def read_skip(dut) -> int:
@@ -64,36 +61,17 @@ async def reset_dut(dut) -> None:
 
 
 async def run_stream(dut, weights, acts):
-    """Feed one pair per cycle; return (expected_acc, expected_skip)."""
-    expected_acc = 0
-    expected_skip = 0
+    """Feed one pair per cycle; return the golden (acc, skip) for the stream."""
     for w, a in zip(weights, acts):
-        w = int(w)
-        a = int(a)
         dut.valid_in.value = 1
-        dut.weight.value = w & DATA_MASK
-        dut.act.value = a & DATA_MASK
+        dut.weight.value = int(w) & DATA_MASK
+        dut.act.value = int(a) & DATA_MASK
         await RisingEdge(dut.clk)
-        if w == 0 or a == 0:
-            expected_skip += 1
-        else:
-            expected_acc += w * a
     dut.valid_in.value = 0
     # One more edge + settle so the final NBA update is committed before read.
     await RisingEdge(dut.clk)
     await Timer(1, unit="ns")
-    return expected_acc, expected_skip
-
-
-def _gen_pairs(n: int, sparsity: float, seed: int):
-    """Random signed operands with ~`sparsity` fraction of zeros injected."""
-    rng = np.random.default_rng(seed)
-    w = rng.integers(DATA_MIN, DATA_MAX + 1, size=n)
-    a = rng.integers(DATA_MIN, DATA_MAX + 1, size=n)
-    if sparsity > 0:
-        w[rng.random(n) < sparsity] = 0
-        a[rng.random(n) < sparsity] = 0
-    return w, a
+    return golden(weights, acts)
 
 
 async def _check_stream(dut, weights, acts, label):
@@ -111,14 +89,14 @@ async def _check_stream(dut, weights, acts, label):
 @cocotb.test()
 async def test_dense(dut):
     """No injected zeros: every pair MACs, skip_count near zero."""
-    w, a = _gen_pairs(64, sparsity=0.0, seed=1)
+    w, a = gen_pairs(64, sparsity=0.0, seed=1)
     await _check_stream(dut, w, a, "dense")
 
 
 @cocotb.test()
 async def test_sparse(dut):
     """High sparsity: most pairs are skipped."""
-    w, a = _gen_pairs(128, sparsity=0.7, seed=2)
+    w, a = gen_pairs(128, sparsity=0.7, seed=2)
     await _check_stream(dut, w, a, "sparse")
 
 
