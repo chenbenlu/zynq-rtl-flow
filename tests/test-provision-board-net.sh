@@ -89,6 +89,9 @@ expect "two candidates: refuses to guess" \
   "eth0 UP 192.168.100.1/24"$'\n'"eth1 UP 192.168.100.1/24" "" 1 "" "refusing to guess" --down
 expect "a NIC shared with another address is refused" \
   "eth0 UP 10.1.2.3/24 192.168.100.1/24" "" 1 "" "carries 10.1.2.3/24" --down
+expect "a link-local address alongside ours is not another link" \
+  "$LAB"$'\n'"eth1 UP 192.168.100.1/24 169.254.7.9/16" "" 0 \
+  "addr flush dev eth1;link set eth1 down" "" --down
 
 echo "-- the real board link still tears down"
 expect "found by address" "$BOARD" "" 0 "addr flush dev eth1;link set eth1 down" "" --down
@@ -102,6 +105,9 @@ expect "an unaddressed NIC is configured" \
   "$BOTH"$'\n'"eth2 DOWN" eth2 0 "link set eth2 up;addr replace 192.168.100.1/24 dev eth2" ""
 expect "re-running on the board link is idempotent" \
   "$BOTH" eth1 0 "link set eth1 up;addr replace 192.168.100.1/24 dev eth1" ""
+expect "a NIC holding only a link-local address is unconfigured, not taken" \
+  "$BOTH"$'\n'"eth2 UP 169.254.7.9/16" eth2 0 \
+  "link set eth2 up;addr replace 192.168.100.1/24 dev eth2" ""
 
 echo "-- arguments"
 expect "a typo does not fall through to the up path" "$BOTH" "" 2 "" "unknown argument" --dowm

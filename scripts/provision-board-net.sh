@@ -42,12 +42,15 @@ Environment:
 MSG
 }
 
-addrs_on() {
-  ip -4 -br addr show "$1" 2>/dev/null | awk '{ for (i = 3; i <= NF; i++) print $i }'
-}
-
+# 169.254.x is what the kernel puts on a NIC that has no configuration, so it
+# marks the absence of a link rather than someone else's — and a board cabled
+# but not yet booted, this script's normal state, is exactly where it appears.
 foreign_addrs() {
-  addrs_on "$1" | awk -v ip="$HOST_IP" '{ split($0, a, "/"); if (a[1] != ip) print }'
+  ip -4 -br addr show "$1" 2>/dev/null |
+    awk -v ip="$HOST_IP" '{ for (i = 3; i <= NF; i++) {
+      split($i, a, "/")
+      if (a[1] != ip && a[1] !~ /^169\.254\./) print $i
+    } }'
 }
 
 nics_carrying_host_addr() {
@@ -61,7 +64,10 @@ nics_carrying_host_addr() {
 # way up we would stamp on it, on the way down we would flush it away.
 assert_not_shared() {
   local nic="$1" refusal="$2" foreign
-  foreign="$(foreign_addrs "$nic")"
+  if ! foreign="$(foreign_addrs "$nic")"; then
+    echo "provision-board-net: cannot read the addresses on $nic — $refusal." >&2
+    exit 1
+  fi
   if [[ -n "$foreign" ]]; then
     echo "provision-board-net: $nic carries ${foreign//$'\n'/, } — $refusal." >&2
     echo "                     That is not the board link. Set NIC= to the interface" >&2
