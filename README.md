@@ -129,8 +129,10 @@ bash scripts/provision-vivado.sh                # install (hours)
 # 2. Build the container that runs it
 make vivado-image
 
-# 3. When the KV260 is cabled to the host's second NIC
-sudo bash scripts/provision-board-net.sh
+# 3. When the KV260 is cabled in. There is no default NIC — name the interface
+#    it is cabled to ('ip -4 -br addr' lists them). Teardown (--down) needs no
+#    NIC=: it finds the link by the address on it, and touches nothing else.
+sudo NIC=<nic> bash scripts/provision-board-net.sh
 ```
 
 The toolchain is installed to the host's persistent disk and mounted into the

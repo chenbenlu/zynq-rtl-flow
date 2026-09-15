@@ -27,7 +27,7 @@ SEC_ENGINE  ?= eqy
 SEC_DEPTH   ?= 20
 export GOLDEN REVISED SEC_ENGINE SEC_DEPTH
 
-.PHONY: all lint sim wave coverage sec format format-check regress clean clean-synth help \
+.PHONY: all lint sim test-scripts wave coverage sec format format-check regress clean clean-synth help \
         synth impl bitstream hls xclbin vivado-shell vivado-gui vivado-image
 
 all: regress
@@ -39,6 +39,10 @@ lint:
 ## sim: build + run the cocotb simulation via pytest
 sim:
 	SIM=$(SIM) $(PYTEST) tb
+
+## test-scripts: run the shell-script tests in tests/ (no RTL toolchain needed)
+test-scripts:
+	@for t in tests/test-*.sh; do echo ">> $$t"; bash "$$t" || exit 1; done
 
 ## wave: open the most recent waveform in GTKWave
 wave:
@@ -120,7 +124,7 @@ format:
 format-check:
 	@bash scripts/format.sh check
 
-## regress: lint -> sim -> coverage
+## regress: test-scripts -> lint -> sim -> coverage
 regress:
 	@bash scripts/regress.sh
 

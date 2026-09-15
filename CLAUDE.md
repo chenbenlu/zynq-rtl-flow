@@ -18,12 +18,13 @@ different container, on one machine only** — see "Two containers" below.
 ```bash
 make lint          # Verilator --lint-only -Wall + verible-verilog-lint
 make sim           # build + run cocotb suite via pytest (2 seams, 18 tests, must stay green)
+make test-scripts  # bash tests for scripts/ (no RTL toolchain, no root, no hardware)
 make coverage      # Python (pytest-cov) + RTL (verilator_coverage) -> sim/coverage/
 make sec GOLDEN=HEAD   # sequential equivalence check vs a reference revision
 make format        # verible-verilog-format --inplace
 make format-check  # CI-style: fail if unformatted
 make wave          # GTKWave on latest sim/**/dump.vcd (X11) — prefer WaveTrace/TerosHDL in-editor
-make regress       # lint -> sim -> coverage (matches CI)
+make regress       # test-scripts -> lint -> sim -> coverage (matches CI)
 make clean
 
 make synth         # OOC synthesis of one module -> build/<board>/ooc/ (BOARD=, CLK_PERIOD=)
@@ -77,6 +78,10 @@ missing kernel, not the script.
 - `tb/model/sparse_mac_model.py` — the numpy golden model and operand generator,
   shared by both seams. One definition of correct behaviour, imported, never copied.
 - `tb/conftest.py` — adds each `tb/<dut>/` to `sys.path`.
+- `tests/` — `test-*.sh`, bash tests for the scripts that cannot be exercised
+  for real (`provision-board-net.sh` reconfigures the build host's own NICs).
+  They stub the command the script acts through and assert on what it tried to
+  do; `make test-scripts` runs them anywhere bash does.
 - `scripts/` — lint / format / regress / wave / sec.
   `rtl_sources.sh` holds the RTL source list shared by lint, sec and the synthesis flows.
 - `flows/` — synthesis flows: `common/` (board map incl. per-board PL clock
