@@ -114,7 +114,7 @@ vivado-shell:
 
 ## vivado-gui: launch the Vivado GUI on the build host's display
 vivado-gui:
-	@bash scripts/vivado-run.sh bash flows/embedded/gui.sh
+	@bash scripts/vivado-run.sh bash flows/embedded/gui.sh $(PRJ)
 
 ## format: rewrite SystemVerilog in place with Verible
 format:
