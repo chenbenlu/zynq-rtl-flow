@@ -19,6 +19,7 @@ accelerator on, not a finished design.
 | Verible | v0.0-4063-gf831ec18 |
 | Python | 3.12 |
 | Base image | Ubuntu 24.04 |
+| Vivado / Vitis | 2026.1 (build host only) |
 
 ## Prerequisites
 
@@ -42,7 +43,7 @@ accelerator on, not a finished design.
 
    ```bash
    make lint      # Verilator strict lint + Verible
-   make sim       # build + run the cocotb suite (5 tests)
+   make sim       # build + run the cocotb suite (18 tests, 2 seams)
    make coverage  # Python + RTL coverage -> sim/coverage/
    make wave      # open the latest waveform (needs X11, see below)
    make regress   # lint -> sim -> coverage (what CI runs)
@@ -96,6 +97,85 @@ podman run --rm --userns=keep-id -v "$PWD":/workspace -w /workspace \
 To switch the dump to FST, pass `--trace-fst` in the runner `build_args`
 (see [tb/sparse_mac_pe/test_sparse_mac_pe.py](tb/sparse_mac_pe/test_sparse_mac_pe.py)).
 
+## Synthesis and implementation (build host only)
+
+Simulation runs anywhere; synthesis does not. The AMD toolchain lives on one
+machine — the **build host**, `RTXWS` — inside a second container that is
+separate from the simulation image and never published to a registry.
+
+Two flows run side by side, and they are not interchangeable:
+
+| Flow | Path | Artefact |
+|------|------|----------|
+| **Embedded** | hand-written SystemVerilog → Vivado → PS app over AXI | `.bit` / firmware overlay |
+| **Acceleration** | HLS C++ → `v++` → XRT on the board | `.xclbin` |
+
+See [CONTEXT.md](CONTEXT.md) for the vocabulary and
+[docs/adr/](docs/adr/) for the decisions behind the setup.
+
+### One-time setup on the build host
+
+Run these **as `ubuntu`** on the build host — the persistent disk is owned by
+that account, and its UID is what the container's user is aligned to.
+
+```bash
+# 1. Download the AMD installer yourself (it needs a signed-in account) and drop
+#    it in /home/ubuntu/disk/lab/vivado-installer/ — the ~400 MB web installer
+#    is the expected one; it pulls only the device families you select.
+bash scripts/provision-vivado.sh --auth         # store an AMD token, once
+bash scripts/provision-vivado.sh --config-gen   # generate + edit the config
+bash scripts/provision-vivado.sh                # install (hours)
+
+# 2. Build the container that runs it
+make vivado-image
+
+# 3. When the KV260 is cabled to the host's second NIC
+sudo bash scripts/provision-board-net.sh
+```
+
+The toolchain is installed to the host's persistent disk and mounted into the
+container rather than baked into the image — the reasoning, and what that costs,
+is in [ADR-0001](docs/adr/0001-vivado-installed-on-persistent-disk.md).
+
+### Running a flow
+
+```bash
+make vivado-shell            # a shell inside the Vivado container
+make synth                   # OOC baseline for sparse_cnn_axi on kv260
+make synth RTL_TOP=sparse_mac_pe   # ... or for the bare PE
+make synth BOARD=zcu104 CLK_PERIOD=2.5
+make impl BOARD=kv260        # place & route the system design
+make bitstream BOARD=kv260   # .bit + .bin from the routed checkpoint
+make hls KERNEL=sparse_conv
+make vivado-gui              # GUI on the build host's display
+```
+
+`make synth` synthesises one module out-of-context — no surrounding design, no
+I/O buffers — and reports what that module costs and how fast it runs. It is a
+measurement, not a step towards a bitstream.
+
+`make impl` builds the real thing: the block design in
+[flows/embedded/bd/system.tcl](flows/embedded/bd/system.tcl) — Zynq PS, AXI
+interconnect, a DMA feeding the accelerator's stream — placed and routed against
+the per-board PL clock target in [flows/common/boards.sh](flows/common/boards.sh),
+with a summary in `build/<board>/impl/impl_summary.txt`. `make bitstream` writes
+the `.bit` from the routed checkpoint.
+
+The acceleration-flow targets (`make hls`, `make xclbin`) still depend on work
+that has not been done yet — an HLS kernel and a platform — and each says
+exactly what it is waiting for.
+
+### Target boards
+
+| Board | Device | Programmed via |
+|-------|--------|----------------|
+| KV260 (primary) | ZU5EV | SD-card boot + firmware overlay from Linux |
+| ZCU104 | ZU7EV | traditional PetaLinux flow |
+
+Both devices are covered by the free Vivado ML Standard Edition; no licence
+purchase is needed. The KV260 is cabled directly to the build host's second NIC
+on a private segment — [ADR-0003](docs/adr/0003-kv260-direct-attached-to-build-host.md).
+
 ## Continuous Integration
 
 Two GitHub Actions workflows:
@@ -113,13 +193,18 @@ Two GitHub Actions workflows:
 ## Project layout
 
 ```
-rtl/        SystemVerilog sources (sparse_cnn_pkg, sparse_mac_pe)
+rtl/        SystemVerilog sources (sparse_cnn_pkg, sparse_mac_pe, sparse_cnn_axi)
 tb/         cocotb testbenches + pytest runners
-scripts/    lint / format / regress / wave helpers
-docker/     toolchain Dockerfile
-sim/        build + run artifacts, waveforms, coverage (gitignored)
-docs/       architecture notes & extension guide
+flows/      synthesis flows — common/ (board map), embedded/, accel/
+scripts/    lint / format / regress / wave + Vivado provisioning helpers
+docker/     Dockerfile (simulation) + vivado.Dockerfile (synthesis)
+sim/        simulation artifacts, waveforms, coverage (gitignored)
+build/      synthesis + implementation artifacts (gitignored)
+docs/       architecture notes, register map, extension guide, ADRs
+CONTEXT.md  project glossary
 ```
 
 See [docs/architecture.md](docs/architecture.md) for the data flow and how to
-extend the single PE into a PE array with AXI interfaces.
+extend the single PE into a PE array, and
+[docs/register-map.md](docs/register-map.md) for the interface a PS-side driver
+is written against.

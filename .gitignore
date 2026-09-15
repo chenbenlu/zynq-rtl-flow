@@ -24,3 +24,15 @@ venv/
 # Editor / OS
 .DS_Store
 *.swp
+
+# Synthesis / implementation artifacts (flows/ writes into build/)
+build/
+.Xil/
+*.jou
+vivado*.log
+vivado_pid*.str
+*.dcp
+*.bit
+*.xsa
+*.xo
+*.xclbin
