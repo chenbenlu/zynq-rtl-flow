@@ -64,6 +64,17 @@ RUN ln -sf /lib64/ld-linux-x86-64.so.2 /lib64/ld-lsb-x86-64.so.3
 # the link is set directly — deterministic, and visible to anyone reading this.
 RUN ln -sf /bin/bash /bin/sh
 
+# Vivado builds the "Host : ... running 64-bit <os>" line that it stamps into
+# every generated file by reading /etc/os-release, and on Ubuntu 24.04 it
+# splices the VERSION and VERSION_CODENAME lines in raw rather than taking one
+# field. In a report that is cosmetic noise. In the Verilog that IP Integrator
+# generates for a block design it is fatal: the extra lines land outside the
+# comment, the netlist no longer parses, the wrapper cannot be validated, and
+# Vivado quietly substitutes a different top module — so implementation
+# succeeds while building the wrong design. Dropping the two fields costs the
+# OS name in a header ("unknown") and nothing else; apt has already run.
+RUN sed -i -E '/^(VERSION|VERSION_CODENAME)=/d' /etc/os-release
+
 # The installer and several tools misbehave under the C locale.
 RUN locale-gen en_US.UTF-8
 ENV LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8

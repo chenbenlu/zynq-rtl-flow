@@ -22,10 +22,16 @@
 // Single clock domain: everything runs on aclk, the PL clock sourced by the PS.
 // =============================================================================
 module sparse_cnn_axi #(
-    // The control interface's own widths. The operand widths are localparams
-    // below, not parameters: IP Integrator evaluates a parameter's default
-    // without visibility of the package, so a package-scoped default stops the
-    // module being inferred into a block design at all.
+    // Operand width. It drives the stream port's width, so it has to be a
+    // parameter and its default has to be a literal: IP Integrator evaluates
+    // everything in a module's header without visibility of the package, and a
+    // package-scoped reference anywhere in there — a parameter default or a
+    // port width expression — stops the module being inferred into a block
+    // design at all. The package stays the single source of truth via the
+    // elaboration check below, which fails the build if the two drift apart.
+    parameter int unsigned DATA_W = 8,
+
+    // The control interface's own widths.
     parameter int unsigned AXIL_DATA_W = 32,
     parameter int unsigned AXIL_ADDR_W = 8
 ) (
@@ -58,14 +64,24 @@ module sparse_cnn_axi #(
     input  logic                     s_axi_rready,
 
     // --- AXI4-Stream slave: one operand pair per beat ---
-    input  logic [2*sparse_cnn_pkg::DATA_W-1:0] s_axis_tdata,
-    input  logic                                s_axis_tvalid,
-    output logic                                s_axis_tready,
-    input  logic                                s_axis_tlast
+    input  logic [2*DATA_W-1:0] s_axis_tdata,
+    input  logic                s_axis_tvalid,
+    output logic                s_axis_tready,
+    input  logic                s_axis_tlast
 );
 
-  // Operand widths, from the shared package. Nothing overrides them.
-  localparam int unsigned DataW = sparse_cnn_pkg::DATA_W;
+  // DATA_W is restated in the header because the block design flow requires it
+  // (see the parameter's comment). This is the check that keeps the restatement
+  // honest: elaboration fails if it stops matching the package.
+  if (DATA_W != sparse_cnn_pkg::DATA_W) begin : gen_data_w_check
+    $error(
+        "DATA_W (%0d) does not match sparse_cnn_pkg::DATA_W (%0d)", DATA_W, sparse_cnn_pkg::DATA_W
+    );
+  end
+
+  // The remaining widths are internal — they appear nowhere in the header, so
+  // they are read from the package directly.
+  localparam int unsigned DataW = DATA_W;
   localparam int unsigned AccW = sparse_cnn_pkg::ACC_W;
   localparam int unsigned SkipW = sparse_cnn_pkg::SKIP_W;
 
