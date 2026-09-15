@@ -157,6 +157,16 @@ Python **3.12** · Ubuntu **24.04**. Versions live in
   unset variable. The flow scripts flatten into a differently-named scalar
   (`RTL_SOURCE_LIST`) of **absolute** paths — Vivado runs from the output directory,
   so relative paths resolve against the wrong place.
+- **IP Integrator cannot evaluate a parameter default that references a package.**
+  A module added to a block design is packaged first, and each parameter's default is
+  evaluated with no visibility of the package, so `parameter int unsigned DATA_W =
+  sparse_cnn_pkg::DATA_W` fails at `create_bd_cell` with `Undefined parameter
+  "sparse_cnn_pkg"` — before synthesis runs. Widths that nothing overrides belong in a
+  `localparam` sourced from the package; port widths may reference the package freely,
+  because a width that does not depend on a user parameter is constant-folded. The
+  corollary: **out-of-context synthesis succeeding tells you nothing about whether a
+  module can be instantiated in a block design** — the two use different front ends,
+  and lint, cocotb and `make sec` all resolve the package correctly too.
 - **From 2026.1, Vivado will not launch without a license file — including the free
   tier.** The old "Vivado ML Standard is free and needs no license" rule ended with
   2025.x; 2026.1 uses tiers (Basic free w/ annual renewal, then Core/Pro/Enterprise/Gold)

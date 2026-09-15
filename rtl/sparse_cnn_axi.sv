@@ -22,12 +22,10 @@
 // Single clock domain: everything runs on aclk, the PL clock sourced by the PS.
 // =============================================================================
 module sparse_cnn_axi #(
-    parameter int unsigned DATA_W = sparse_cnn_pkg::DATA_W,
-    parameter int unsigned ACC_W  = sparse_cnn_pkg::ACC_W,
-    parameter int unsigned SKIP_W = sparse_cnn_pkg::SKIP_W,
-
-    // The control interface's own widths. The stream width is not a free choice:
-    // it is one operand pair per beat, so it follows DATA_W.
+    // The control interface's own widths. The operand widths are localparams
+    // below, not parameters: IP Integrator evaluates a parameter's default
+    // without visibility of the package, so a package-scoped default stops the
+    // module being inferred into a block design at all.
     parameter int unsigned AXIL_DATA_W = 32,
     parameter int unsigned AXIL_ADDR_W = 8
 ) (
@@ -60,11 +58,16 @@ module sparse_cnn_axi #(
     input  logic                     s_axi_rready,
 
     // --- AXI4-Stream slave: one operand pair per beat ---
-    input  logic [2*DATA_W-1:0] s_axis_tdata,
-    input  logic                s_axis_tvalid,
-    output logic                s_axis_tready,
-    input  logic                s_axis_tlast
+    input  logic [2*sparse_cnn_pkg::DATA_W-1:0] s_axis_tdata,
+    input  logic                                s_axis_tvalid,
+    output logic                                s_axis_tready,
+    input  logic                                s_axis_tlast
 );
+
+  // Operand widths, from the shared package. Nothing overrides them.
+  localparam int unsigned DataW = sparse_cnn_pkg::DATA_W;
+  localparam int unsigned AccW = sparse_cnn_pkg::ACC_W;
+  localparam int unsigned SkipW = sparse_cnn_pkg::SKIP_W;
 
   localparam int unsigned StrbW = AXIL_DATA_W / 8;
 
@@ -105,8 +108,8 @@ module sparse_cnn_axi #(
 
   logic        [AXIL_DATA_W-1:0] ctrl_reg;
   logic                          done_q;
-  logic signed [      ACC_W-1:0] acc_q;
-  logic        [     SKIP_W-1:0] skip_q;
+  logic signed [       AccW-1:0] acc_q;
+  logic        [      SkipW-1:0] skip_q;
 
   logic start_pulse, clear_pulse, en_reg;
   assign start_pulse = ctrl_reg[CtrlStart];
@@ -243,8 +246,8 @@ module sparse_cnn_axi #(
   // stream needs: it advances only on a beat or a clear, and holds otherwise.
   assign pe_en = beat || pe_clear;
 
-  logic signed [ACC_W-1:0] pe_acc;
-  logic [SKIP_W-1:0] pe_skip;
+  logic signed [AccW-1:0] pe_acc;
+  logic [SkipW-1:0] pe_skip;
   /* verilator lint_off UNUSEDSIGNAL */
   // The PE marks the cycle it consumed a pair; the wrapper already tracks that
   // itself as `beat`. Connected rather than left dangling so the pin is explicit.
@@ -252,17 +255,17 @@ module sparse_cnn_axi #(
   /* verilator lint_on UNUSEDSIGNAL */
 
   sparse_mac_pe #(
-      .DATA_W(DATA_W),
-      .ACC_W (ACC_W),
-      .SKIP_W(SKIP_W)
+      .DATA_W(DataW),
+      .ACC_W (AccW),
+      .SKIP_W(SkipW)
   ) u_pe (
       .clk       (aclk),
       .rst_n     (aresetn),
       .en        (pe_en),
       .clear_acc (pe_clear),
       .valid_in  (beat),
-      .weight    (s_axis_tdata[DATA_W-1:0]),
-      .act       (s_axis_tdata[2*DATA_W-1:DATA_W]),
+      .weight    (s_axis_tdata[DataW-1:0]),
+      .act       (s_axis_tdata[2*DataW-1:DataW]),
       .acc       (pe_acc),
       .valid_out (pe_valid_out),
       .skip_count(pe_skip)
