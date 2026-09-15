@@ -27,6 +27,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Test scripts (bash)
+        run: make test-scripts
+
       - name: Lint (Verilator + Verible)
         run: make lint
 
