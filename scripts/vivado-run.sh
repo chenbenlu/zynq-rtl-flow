@@ -5,7 +5,7 @@
 #   bash scripts/vivado-run.sh build          # build the image
 #   bash scripts/vivado-run.sh                # interactive shell
 #   bash scripts/vivado-run.sh make synth     # one-shot
-#   bash scripts/vivado-run.sh vivado         # the GUI (see below)
+#   bash scripts/vivado-run.sh bash flows/embedded/gui.sh   # the GUI (see below)
 #
 # The toolchain is bind-mounted from the host rather than living in the image
 # (docs/adr/0001-...), and the host's X socket is shared so the GUI draws onto
