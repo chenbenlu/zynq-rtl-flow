@@ -144,6 +144,9 @@ module sparse_cnn_axi #(
   assign wr_data = w_pend ? w_data_q : s_axi_wdata;
   assign wr_strb = w_pend ? w_strb_q : s_axi_wstrb;
 
+  logic ctrl_wr;
+  assign ctrl_wr = wr_commit && wr_addr == RegCtrl;
+
   always_ff @(posedge aclk) begin
     if (!aresetn) begin
       aw_pend  <= 1'b0;
@@ -179,7 +182,7 @@ module sparse_cnn_axi #(
     end else begin
       ctrl_reg[CtrlStart] <= 1'b0;
       ctrl_reg[CtrlClear] <= 1'b0;
-      if (wr_commit && wr_addr == RegCtrl) begin
+      if (ctrl_wr) begin
         for (int unsigned i = 0; i < StrbW; i++) begin
           if (wr_strb[i]) ctrl_reg[i*8+:8] <= wr_data[i*8+:8] & CtrlMask[i*8+:8];
         end
@@ -190,11 +193,21 @@ module sparse_cnn_axi #(
   // ---------------------------------------------------------------------------
   // AXI4-Lite read channel
   // ---------------------------------------------------------------------------
+  // A START is visible to software from the cycle its write commits: an AR
+  // sampled on that very edge, and then the cycles the pulse takes to reach the
+  // tile FSM. Reporting `state` and `done_q` raw leaves STATUS showing BUSY=0,
+  // DONE=1 across that gap — bit-for-bit a completed tile — so a poll loop that
+  // does not wait for the write response falls through it into the previous
+  // tile's ACC and SKIP. Breaking the tie in the write's favour is what lets
+  // the register map promise a poll loop that needs no fence.
+  logic start_taken;
+  assign start_taken = start_pulse || (ctrl_wr && wr_strb[CtrlStart/8] && wr_data[CtrlStart]);
+
   logic [AXIL_DATA_W-1:0] status_word;
   always_comb begin
     status_word = '0;
-    status_word[StatusBusy] = (state != S_IDLE);
-    status_word[StatusDone] = done_q;
+    status_word[StatusBusy] = (state != S_IDLE) || start_taken;
+    status_word[StatusDone] = done_q && !start_taken;
   end
 
   logic [AXIL_DATA_W-1:0] rd_mux;

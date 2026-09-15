@@ -67,6 +67,14 @@ tile that never receives its `tlast`; reset the block instead.
 BUSY falls and DONE rises in the same cycle, so a poll loop can wait on DONE
 alone.
 
+Both bits turn over with the START write itself, not a few cycles behind it. AXI
+orders nothing between the write and read channels, so a STATUS read can reach
+the accelerator in the very cycle the CTRL write commits; that tie goes to the
+write, and the read already sees `BUSY=1, DONE=0`, as does every read after it.
+The poll loop below therefore needs no fence between the write and the reads
+that follow it: it can never be answered with the previous tile's `BUSY=0,
+DONE=1` and mistake it for this tile finishing.
+
 ## `0x0C` ACC — accumulator
 
 The signed accumulator of the **last completed tile**, sign-extended to 32 bits.

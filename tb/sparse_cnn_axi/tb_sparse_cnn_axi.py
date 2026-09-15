@@ -14,7 +14,7 @@ from __future__ import annotations
 import cocotb
 import numpy as np
 from cocotb.clock import Clock
-from cocotb.triggers import RisingEdge, Timer
+from cocotb.triggers import ReadOnly, RisingEdge, Timer
 from cocotbext.axi import (
     AxiLiteBus,
     AxiLiteMaster,
@@ -65,26 +65,116 @@ class _BeatCounter:
                 self.total += 1
 
 
-class Accelerator:
-    """Driver for the wrapper's two AXI interfaces."""
+class RawAxiLite:
+    """A cycle-level AXI4-Lite master, offering the same dword API.
+
+    ``AxiLiteMaster`` waits for BRESP before it issues the next AR, so every
+    read it performs lands a comfortable distance after the write before it.
+    AXI orders nothing between the two channels and a PS imposes no such wait,
+    so that serialisation hides whatever the slave reports while a write is
+    still landing. This driver presents the AR in the cycle the caller reaches
+    it instead.
+    """
 
     def __init__(self, dut):
         self.dut = dut
-        self.axil = AxiLiteMaster(
+        self.clk = dut.aclk
+        dut.s_axi_awaddr.value = 0
+        dut.s_axi_awprot.value = 0
+        dut.s_axi_awvalid.value = 0
+        dut.s_axi_wdata.value = 0
+        dut.s_axi_wstrb.value = 0xF
+        dut.s_axi_wvalid.value = 0
+        dut.s_axi_bready.value = 1
+        dut.s_axi_araddr.value = 0
+        dut.s_axi_arprot.value = 0
+        dut.s_axi_arvalid.value = 0
+        dut.s_axi_rready.value = 1
+
+    def _present_write(self, addr: int, value: int) -> None:
+        dut = self.dut
+        dut.s_axi_awaddr.value = addr
+        dut.s_axi_awvalid.value = 1
+        dut.s_axi_wdata.value = value
+        dut.s_axi_wstrb.value = 0xF
+        dut.s_axi_wvalid.value = 1
+
+    async def _settle_write(self) -> None:
+        dut = self.dut
+        aw_done = w_done = False
+        while not (aw_done and w_done):
+            await ReadOnly()
+            aw_fires = not aw_done and dut.s_axi_awready.value == 1
+            w_fires = not w_done and dut.s_axi_wready.value == 1
+            await RisingEdge(self.clk)
+            if aw_fires:
+                aw_done = True
+                dut.s_axi_awvalid.value = 0
+            if w_fires:
+                w_done = True
+                dut.s_axi_wvalid.value = 0
+
+    async def write_dword(self, addr: int, value: int) -> None:
+        """Commit a write and return at the start of the cycle after it commits."""
+        await RisingEdge(self.clk)
+        self._present_write(addr, value)
+        await self._settle_write()
+
+    async def write_read_same_cycle(self, waddr: int, value: int, raddr: int) -> int:
+        """Present a write and a read together, so the AR is sampled on the very
+        edge the write commits — the tie AXI leaves the slave to break."""
+        await RisingEdge(self.clk)
+        self._present_write(waddr, value)
+        settling = cocotb.start_soon(self._settle_write())
+        data = await self.read_dword(raddr)
+        await settling
+        return data
+
+    async def read_dword(self, addr: int) -> int:
+        """Read a register, with the AR presented in the current cycle."""
+        dut = self.dut
+        dut.s_axi_araddr.value = addr
+        dut.s_axi_arvalid.value = 1
+        while True:
+            await ReadOnly()
+            accepted = dut.s_axi_arready.value == 1
+            await RisingEdge(self.clk)
+            if accepted:
+                dut.s_axi_arvalid.value = 0
+                break
+        while True:
+            await ReadOnly()
+            if dut.s_axi_rvalid.value == 1:
+                data = dut.s_axi_rdata.value.to_unsigned()
+                await RisingEdge(self.clk)
+                return data
+            await RisingEdge(self.clk)
+
+
+def _stream_source(dut) -> AxiStreamSource:
+    # One operand pair per beat: the stream is 2*DATA_W wide and carries a
+    # single "byte" of that width, so frames are lists of packed pairs.
+    return AxiStreamSource(
+        AxiStreamBus.from_prefix(dut, "s_axis"),
+        dut.aclk,
+        dut.aresetn,
+        reset_active_level=False,
+        byte_size=2 * DATA_W,
+    )
+
+
+class Accelerator:
+    """Driver for the wrapper's two AXI interfaces."""
+
+    def __init__(self, dut, lite=None):
+        self.dut = dut
+        self.axil = lite or AxiLiteMaster(
             AxiLiteBus.from_prefix(dut, "s_axi"),
             dut.aclk,
             dut.aresetn,
             reset_active_level=False,
         )
-        # One operand pair per beat: the stream is 2*DATA_W wide and carries a
-        # single "byte" of that width, so frames are lists of packed pairs.
-        self.stream = AxiStreamSource(
-            AxiStreamBus.from_prefix(dut, "s_axis"),
-            dut.aclk,
-            dut.aresetn,
-            reset_active_level=False,
-            byte_size=2 * DATA_W,
-        )
+        self.stream = _stream_source(dut)
 
     def count_beats(self):
         """Start counting accepted stream beats at the wrapper's own ports."""
@@ -124,10 +214,17 @@ class Accelerator:
         return await self.read_acc(), await self.read(REG_SKIP)
 
 
-async def bring_up(dut) -> Accelerator:
+class RacyAccelerator(Accelerator):
+    """An `Accelerator` whose control writes and register reads may overlap."""
+
+    def __init__(self, dut):
+        super().__init__(dut, lite=RawAxiLite(dut))
+
+
+async def bring_up(dut, build=Accelerator) -> Accelerator:
     cocotb.start_soon(Clock(dut.aclk, CLK_PERIOD_NS, unit="ns").start())
     dut.aresetn.value = 0
-    accel = Accelerator(dut)
+    accel = build(dut)
     for _ in range(5):
         await RisingEdge(dut.aclk)
     dut.aresetn.value = 1
@@ -296,6 +393,48 @@ async def test_result_read_before_completion(dut):
         assert await accel.read(REG_SKIP) == first_skip, "partial skip count leaked"
     assert saw_busy, "tile completed before a mid-tile read could be issued"
 
+    exp_acc, exp_skip = golden(second_w, second_a)
+    assert await accel.read_acc() == exp_acc
+    assert await accel.read(REG_SKIP) == exp_skip
+
+
+def assert_tile_in_flight(status: int, where: str) -> None:
+    """A started tile reads busy and not done — never the completed pattern."""
+    assert not status & STATUS_DONE, f"{where} reported the previous tile's DONE"
+    assert status & STATUS_BUSY, f"{where} reported an idle accelerator"
+
+
+@cocotb.test()
+async def test_status_never_reports_the_previous_tile_after_start(dut):
+    """STATUS stops describing the last tile the moment START is taken.
+
+    AXI orders nothing between the write and the read channel, so the STATUS
+    read of the poll loop in docs/register-map.md can be sampled on the very
+    edge the CTRL write commits, and again while the pulse works its way to the
+    tile FSM. A STATUS that still reads BUSY=0, DONE=1 anywhere in there is
+    bit-for-bit a completed tile — the loop falls straight through it and reads
+    ACC and SKIP a whole tile late.
+    """
+    accel = await bring_up(dut, RacyAccelerator)
+
+    first_w, first_a = gen_pairs(16, sparsity=0.2, seed=60)
+    await check_tile(accel, first_w, first_a, "first")
+
+    # The tightest race there is: the AR is sampled on the edge that commits the
+    # write, so the slave has to break the tie in the write's favour.
+    racing = await accel.axil.write_read_same_cycle(
+        REG_CTRL, CTRL_EN | CTRL_START, REG_STATUS
+    )
+    assert_tile_in_flight(racing, "the STATUS read sampled with the CTRL write")
+
+    # Nothing waits for BRESP afterwards either: these land in the cycles the
+    # START pulse takes to reach the FSM.
+    for i in range(8):
+        assert_tile_in_flight(await accel.read(REG_STATUS), f"read {i} after START")
+
+    second_w, second_a = gen_pairs(32, sparsity=0.5, seed=61)
+    await accel.send(second_w, second_a)
+    await accel.await_done()
     exp_acc, exp_skip = golden(second_w, second_a)
     assert await accel.read_acc() == exp_acc
     assert await accel.read(REG_SKIP) == exp_skip
