@@ -35,9 +35,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         libjpeg-turbo8 libpng16-16 \
         ocl-icd-libopencl1 opencl-headers \
         graphviz \
+        x11-utils xvfb \
         python3 python3-venv \
         sudo \
     && rm -rf /var/lib/apt/lists/*
+
+# x11-utils and xvfb are for the command-line tools, not the GUI. The AMD
+# launchers probe the display with xlsclients and, finding none, start their own
+# Xvfb; without either, xsct and the Vitis Python console abort with "<tool> is
+# not available on the system" before reading any input. Nothing in that message
+# mentions X, so it reads like a broken install rather than a container two
+# packages short. The GUI itself needs neither — it draws on the host's X socket.
 
 # The runtime library set above is what the installed toolchain's own
 # scripts/installLibs.sh asks for (libsecret, libyaml, gdk-pixbuf, gtk, nss,

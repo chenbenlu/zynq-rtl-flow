@@ -148,6 +148,7 @@ make synth RTL_TOP=sparse_mac_pe   # ... or for the bare PE
 make synth BOARD=zcu104 CLK_PERIOD=2.5
 make impl BOARD=kv260        # place & route the system design
 make bitstream BOARD=kv260   # .bit + .bin from the routed checkpoint
+make xsa BOARD=zcu104        # hardware handoff for the PS-side boot flow
 make hls KERNEL=sparse_conv
 make vivado-gui              # GUI on the build host's display
 ```
@@ -162,6 +163,12 @@ interconnect, a DMA feeding the accelerator's stream — placed and routed again
 the per-board PL clock target in [flows/common/boards.sh](flows/common/boards.sh),
 with a summary in `build/<board>/impl/impl_summary.txt`. `make bitstream` writes
 the `.bit` from the routed checkpoint.
+
+`make xsa` exports the hardware handoff — the `.xsa` carrying the PS
+configuration, the address map and the block design's metadata. It is what FSBL,
+the PMU firmware and the device tree are generated from, so it is the first
+artefact the PS-side boot flow needs; the bitstream is a separate file beside it
+rather than packaged inside (see the gotcha in CLAUDE.md).
 
 The acceleration-flow targets (`make hls`, `make xclbin`) still depend on work
 that has not been done yet — an HLS kernel and a platform — and each says

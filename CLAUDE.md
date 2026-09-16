@@ -17,7 +17,7 @@ different container, on one machine only** — see "Two containers" below.
 
 ```bash
 make lint          # Verilator --lint-only -Wall + verible-verilog-lint
-make sim           # build + run cocotb suite via pytest (2 seams, 18 tests, must stay green)
+make sim           # build + run cocotb suite via pytest (2 seams, 20 tests, must stay green)
 make test-scripts  # bash tests for scripts/ (no RTL toolchain, no root, no hardware)
 make coverage      # Python (pytest-cov) + RTL (verilator_coverage) -> sim/coverage/
 make sec GOLDEN=HEAD   # sequential equivalence check vs a reference revision
@@ -29,6 +29,8 @@ make clean
 
 make synth         # OOC synthesis of one module -> build/<board>/ooc/ (BOARD=, CLK_PERIOD=)
 make impl          # place & route the system design -> build/<board>/impl/
+make bitstream     # .bit/.bin from the routed checkpoint
+make xsa           # hardware handoff for the PS-side boot flow -> build/<board>/impl/<board>.xsa
 make hls           # Vitis HLS kernel -> .xo  (KERNEL=)
 make xclbin        # v++ link -> .xclbin
 make vivado-image  # build the Vivado container (run on the build host)
@@ -181,7 +183,7 @@ Python **3.12** · Ubuntu **24.04**. Versions live in
   Which devices the free Basic tier covers is not the same list as 2025.x's Standard
   Edition — verify a part empirically rather than citing the old list. **Measured
   2026-09-14: the free Basic tier covers both `xck26` (KV260) and `xczu7ev` (ZCU104)**,
-  synthesis and implementation; the log grants licences per device, so
+  synthesis, implementation and `write_bitstream`; the log grants licences per device, so
   `Got license for feature 'Vivado_Synthesis' and/or device '<part>'` is the line that
   settles it. The licence is node-locked to eth1's MAC and expires 2027-09-14.
 - **Vivado's `settings64.sh` sources its sub-scripts by absolute path**, baked in at
@@ -194,6 +196,32 @@ Python **3.12** · Ubuntu **24.04**. Versions live in
 - **2026.1 has no `vitis_hls` binary.** HLS is a mode of `v++` (`v++ -c --mode hls`),
   driven by a config file, not the classic `open_project`/`csynth_design` Tcl. Tutorials
   and older repos will hand you Tcl that has nothing to run it.
+- **`xsct` is disabled in Vitis 2026.1.** It still exists, still starts, and then prints
+  `[ERROR] ********** XSCT is disabled in Vitis 2026.1 release **********`, pointing at
+  the Vitis Python console (`vitis -s <script.py>`, UG1400) instead. Every FSBL and PMU
+  firmware recipe you will find — `app create -template {Zynq MP FSBL}`, `hsi` commands,
+  `setws`/`app build` — is XSCT Tcl with nothing left to run it, the same trap as the
+  missing `vitis_hls`. Because the tool launches before refusing, the failure looks like a
+  runtime problem rather than a removed feature.
+- **The AMD tool launchers need `x11-utils` and `xvfb` even with no GUI.** They probe the
+  display with `xlsclients` and, finding none, start their own `Xvfb`; a container missing
+  either aborts with `ERROR: <tool> is not available on the system` before reading any
+  input. Nothing in that message mentions X, so it reads like a broken install.
+  `docker/vivado.Dockerfile` carries both for this reason alone — not for the GUI, which
+  needs only the host's X socket (ADR-0002). A `dbus-launch is not available` line also
+  appears; that one is a warning and the tools run without it.
+- **A tool that starts `Xvfb` keeps `docker run` alive after its own command exits.** The
+  child inherits the container's stdout, so the stream never closes and the docker client
+  hangs long after the work is done — which looks exactly like the tool itself hanging.
+  Redirect the tool's output to a file in the mounted workspace and read it from the host
+  afterwards, rather than trying to diagnose a stall that is not one.
+- **`write_hw_platform -include_bit` takes the bitstream from the implementation run**,
+  not from a file. This repo writes the bitstream from the routed checkpoint
+  (`bitstream.tcl`), so the run holds none and the export aborts with `Unable to get BIT
+  file from implementation run`. `make xsa` therefore exports without the bitstream; the
+  `.bit` sits beside the `.xsa` and bootgen is handed both. Adding `-include_bit` means
+  first making `impl` run all the way through bitstream generation, which is a different
+  flow, not a missing switch.
 - **The KV260 is not on the lab network.** It hangs off the build host's second NIC on
   a private segment (ADR-0003) — the router has no free port, and the workstation VLAN
   blocks the server→workstation direction this flow needs. `192.168.100.x` on `RTXWS`
