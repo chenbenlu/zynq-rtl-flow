@@ -10,7 +10,7 @@ vivado_env Vivado
 
 # The project arrives as an argument rather than in the environment. The
 # Makefile's PRJ= is set on the host, and docker run forwards only the variables
-# it was told to — so an env var would be silently dropped at the container
-# boundary, leaving the GUI to open with no project and no complaint.
+# it was told to — so an env var is silently dropped at the container boundary,
+# leaving the GUI to open with no project and no complaint.
 # A relative path resolves against the repo root: env.sh has already cd'd there.
 exec vivado "$@"
