@@ -28,7 +28,7 @@ SEC_DEPTH   ?= 20
 export GOLDEN REVISED SEC_ENGINE SEC_DEPTH
 
 .PHONY: all lint sim test-scripts wave coverage sec format format-check regress clean clean-synth help \
-        synth impl bitstream hls xclbin vivado-shell vivado-gui vivado-image
+        synth impl bitstream xsa boot hls xclbin vivado-shell vivado-gui vivado-image
 
 all: regress
 
@@ -91,6 +91,14 @@ impl:
 ## bitstream: write the bitstream from the routed checkpoint
 bitstream:
 	@bash flows/embedded/bitstream.sh
+
+## xsa: export the hardware handoff (XSA) the PS-side boot flow is built from
+xsa:
+	@bash flows/embedded/xsa.sh
+
+## boot: FSBL + PMU firmware + device tree from the hardware handoff
+boot:
+	@bash flows/embedded/boot.sh
 
 ## --- Synthesis: acceleration flow (HLS kernel -> xclbin) ---
 
