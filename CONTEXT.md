@@ -37,6 +37,14 @@ against, specified in [docs/register-map.md](docs/register-map.md). The
 document is the specification; the RTL and its testbench both answer to it.
 _Avoid_: CSR layout, register file, control interface
 
+**PS-side driver**:
+The software on the board's processing system that operates the accelerator:
+it writes CTRL, submits a tile's operands through the DMA and reads back ACC
+and SKIP. Held to [docs/register-map.md](docs/register-map.md), the same
+document the RTL answers to. A kernel module, because the board's kernel does
+not let userspace hand the DMA a buffer — [ADR-0005](docs/adr/0005-the-accelerators-driver-is-in-scope.md).
+_Avoid_: host driver, kernel driver, ROS node, application
+
 **Golden model**:
 The numpy reference implementation in `tb/model/sparse_mac_model.py` that every
 cocotb testbench compares its DUT against. One definition, imported by each
