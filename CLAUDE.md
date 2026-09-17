@@ -241,6 +241,34 @@ Python **3.12** · Ubuntu **24.04**. Versions live in
   a private segment (ADR-0003) — the router has no free port, and the workstation VLAN
   blocks the server→workstation direction this flow needs. `192.168.100.x` on `RTXWS`
   is that link, not a stray config.
+- **`PSU__NUM_F2P0__INTR__INPUTS` is read-only.** IP Integrator derives `pl_ps_irq0`'s
+  width from what is connected to the port, so setting it costs a `CRITICAL WARNING:
+  [BD 41-737] ... It is read-only` — which also keeps the synthesis run out of the
+  cache. Enable `PSU__USE__IRQ0`, connect the source, and let the width follow. One
+  source connects directly; a second needs an `xlconcat`.
+- **`pl.dtsi` parents its interrupts on `&imux`, which a booted kernel does not have.**
+  `imux` is a proxy interrupt controller the *system* device tree defines so one tree
+  can serve the A53, R5 and PMU domains, mapping every interrupt 1:1 onto that domain's
+  GIC. The board's own tree exports `gic` and nothing else, so the reference resolves
+  against nothing and the overlay is rejected at load — reported as the overlay failing
+  to apply, naming no symbol. `flows/embedded/overlay.py` rewrites it and checks every
+  remaining `&label` against what the board exports.
+- **A DMA channel sub-node gets a different interrupt from the IP that owns it.** With
+  only mm2s connected, the IP node carries the line the block design drives and the
+  channel node gets the next number along, which nothing drives. The driver takes the
+  channel's, so it probes and then waits forever: a completion timeout, not a probe
+  failure, with nothing in it pointing at the device tree. `overlay.py` gives each
+  channel the IP node's entry named for its direction — `interrupt-names` is what ties
+  those numbers to the ports on the block design.
+- **The generated tree describes no connection between two PL IPs.** Nothing in it says
+  the DMA's stream feeds the accelerator, and without a `dmas` property on the client
+  the kernel offers no way to ask for that channel. `overlay.py` adds it, derived from
+  there being one AXI DMA and one accelerator rather than restated.
+- **The board's kernel is built with `CONFIG_STRICT_DEVMEM=y`.** `/dev/mem` maps the
+  accelerator's AXI4-Lite registers, which are device memory, but not the system memory
+  a DMA descriptor points at — so reading `ACC`/`SKIP` from userspace works and
+  submitting a tile cannot. That is why `driver/` exists (ADR-0005), and why it is built
+  on the board: the toolchain image has no kernel headers and the Vivado image is x86.
 - oss-cad-suite is intentionally **off** `PATH` (`OSS_CAD_SUITE` env only): its
   `bin/` ships its own `verilator`/`cocotb-config` that would shadow the pinned
   Verilator v5.042. `scripts/sec.sh` puts it on `PATH` for itself.
