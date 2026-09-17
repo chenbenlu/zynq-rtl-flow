@@ -48,6 +48,13 @@ MSG
   # settings64.sh does not put the bundled FlexLM tools on PATH, so xlicdiag —
   # the thing you reach for when a licence check fails — cannot find lmutil and
   # reports that instead of the licence problem you were diagnosing.
+  #
+  # Written as an `if` rather than `[[ ... ]] && ...` because that form's result
+  # is the function's return value: on an install without this directory
+  # vivado_env would return 1 and `set -e` would end the calling flow script
+  # right here, with nothing printed to say why.
   local flexlm="${settings%/settings64.sh}/bin/unwrapped/lnx64.o"
-  [[ -d "$flexlm" ]] && PATH="$PATH:$flexlm"
+  if [[ -d "$flexlm" ]]; then
+    PATH="$PATH:$flexlm"
+  fi
 }
