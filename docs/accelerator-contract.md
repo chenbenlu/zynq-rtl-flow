@@ -157,6 +157,11 @@ per-design by nature:
 | Module | Shape | Stream master | Register map |
 |--------|-------|---------------|--------------|
 | `sparse_cnn_axi` | Reduces a tile to an accumulator and a skip count | no | [register-map.md](register-map.md) |
+| `relu_axi` | Transforms a tile beat by beat | yes | [register-map-relu.md](register-map-relu.md) |
 
-The second entry is the point of having a contract at all: one implementation
-cannot distinguish a contract from a description of itself.
+The two are deliberately the opposite shapes. One reports through registers and
+the other through a stream; one has only readable fields and the other a
+writable parameter that reaches its data path; their control registers do not
+even agree on which bit enables the design. Everything they have in common is in
+this document, which is what makes it a contract rather than a description of
+whichever was written first.

@@ -22,7 +22,7 @@ different container, on one machine only** — see "Two containers" below.
 
 ```bash
 make lint          # Verilator --lint-only -Wall + verible-verilog-lint
-make sim           # build + run cocotb suite via pytest (2 seams, 20 tests, must stay green)
+make sim           # build + run cocotb suite via pytest (3 seams, 31 tests, must stay green)
 make test-scripts  # bash tests for scripts/ (no RTL toolchain, no root, no hardware)
 make coverage      # Python (pytest-cov) + RTL (verilator_coverage) -> sim/coverage/
 make sec GOLDEN=HEAD   # sequential equivalence check vs a reference revision
@@ -79,13 +79,14 @@ missing kernel, not the script.
 
 ## Layout
 
-- `rtl/` — SystemVerilog. `sparse_cnn_pkg.sv` (widths), `sparse_mac_pe.sv` (the
-  PE) and `sparse_cnn_axi.sv` (the AXI-wrapped top level, and the default
-  `RTL_TOP`).
+- `rtl/` — SystemVerilog. `accel_contract_pkg.sv` is the environment's; the rest
+  belongs to one of the two example accelerators: `sparse_cnn_pkg` /
+  `sparse_mac_pe` / `sparse_cnn_axi` (the default `RTL_TOP`) and `relu_pkg` /
+  `relu_unit` / `relu_axi`.
 - `tb/<dut>/tb_<dut>.py` — cocotb coroutines.
 - `tb/<dut>/test_<dut>.py` — pytest entry; cocotb 2.x `cocotb_tools.runner`.
-- `tb/model/sparse_mac_model.py` — the numpy golden model and operand generator,
-  shared by both seams. One definition of correct behaviour, imported, never copied.
+- `tb/model/` — the numpy golden models, one per accelerator, imported by its
+  seams and never copied into one.
 - `tb/conftest.py` — adds each `tb/<dut>/` to `sys.path`.
 - `tests/` — `test-*.sh`, bash tests for the scripts that cannot be exercised
   for real (`provision-board-net.sh` reconfigures the build host's own NICs).
@@ -98,9 +99,9 @@ missing kernel, not the script.
   `xdc/<board>/`), `accel/`.
 - `docs/accelerator-contract.md` — what a module must present to get the flows.
   The environment's specification; every conforming accelerator answers to it.
-- `docs/register-map.md` — `sparse_cnn_axi`'s AXI4-Lite map. The specification
-  for *that* accelerator, not a description: its tests check the RTL against it.
-  Another accelerator brings its own map.
+- `docs/register-map.md`, `docs/register-map-relu.md` — one AXI4-Lite map per
+  accelerator. Each is the specification for *that* accelerator, not a
+  description: its tests check the RTL against it.
 - `docker/Dockerfile` — multi-stage; Verilator built from source.
 - `docker/vivado.Dockerfile` — AMD toolchain runtime deps (toolchain itself is mounted).
 - `.devcontainer/devcontainer.json` — consumes the GHCR image (local `build`

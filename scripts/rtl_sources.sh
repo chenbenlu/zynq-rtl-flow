@@ -6,8 +6,8 @@
 
 RTL_TOP="${RTL_TOP:-sparse_cnn_axi}"
 
-RTL_PACKAGES=(rtl/accel_contract_pkg.sv rtl/sparse_cnn_pkg.sv)
-RTL_MODULES=(rtl/sparse_mac_pe.sv rtl/sparse_cnn_axi.sv)
+RTL_PACKAGES=(rtl/accel_contract_pkg.sv rtl/sparse_cnn_pkg.sv rtl/relu_pkg.sv)
+RTL_MODULES=(rtl/sparse_mac_pe.sv rtl/sparse_cnn_axi.sv rtl/relu_unit.sv rtl/relu_axi.sv)
 RTL_SOURCES=("${RTL_PACKAGES[@]}" "${RTL_MODULES[@]}")
 
 # The sources one top needs, newline-separated — exactly those, including
@@ -17,6 +17,13 @@ RTL_SOURCES=("${RTL_PACKAGES[@]}" "${RTL_MODULES[@]}")
 rtl_sources_for() {
   case "${1:-}" in
     sparse_mac_pe) printf '%s\n' rtl/sparse_cnn_pkg.sv rtl/sparse_mac_pe.sv ;;
+    sparse_cnn_axi)
+      printf '%s\n' rtl/accel_contract_pkg.sv rtl/sparse_cnn_pkg.sv rtl/sparse_mac_pe.sv \
+          rtl/sparse_cnn_axi.sv
+      ;;
+    relu_axi)
+      printf '%s\n' rtl/accel_contract_pkg.sv rtl/relu_pkg.sv rtl/relu_unit.sv rtl/relu_axi.sv
+      ;;
     *) printf '%s\n' "${RTL_SOURCES[@]}" ;;
   esac
 }
@@ -26,6 +33,7 @@ rtl_sources_for() {
 rtl_clk_port() {
   case "${1:-}" in
     sparse_mac_pe) echo clk ;;
+    relu_unit) echo "" ;;  # combinational: nothing to constrain
     *) echo aclk ;;
   esac
 }

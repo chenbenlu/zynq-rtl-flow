@@ -15,10 +15,11 @@ must present to be carried through it is
 AXI4-Lite slave with an ID register, an AXI4-Stream slave, and optionally a
 stream master.
 
-One accelerator goes through it today: a **sparse MAC processing element** with
-zero-skip and the AXI wrapper around it, with a numpy golden model, two cocotb
-seams and a GitHub Actions regression. It is the contract's first
-implementation, not the point of the repository.
+Two accelerators go through it today, chosen to be the opposite shapes: a
+**sparse MAC** that reduces a tile to an accumulator and reports it in a
+register, and a **Leaky ReLU** that transforms a tile beat by beat and sends it
+back out on a stream, with a writable slope. Each has a numpy golden model and a
+cocotb seam; neither is the point of the repository.
 
 Which parts travel: everything under `make regress` runs anywhere Docker does.
 Synthesis and everything after it do not — they need the build host, its
@@ -58,7 +59,7 @@ cannot reach.
 
    ```bash
    make lint      # Verilator strict lint + Verible
-   make sim       # build + run the cocotb suite (20 tests, 2 seams)
+   make sim       # build + run the cocotb suite (31 tests, 3 seams)
    make coverage  # Python + RTL coverage -> sim/coverage/
    make wave      # open the latest waveform (needs X11, see below)
    make regress   # lint -> sim -> coverage (what CI runs)
@@ -264,7 +265,7 @@ Two GitHub Actions workflows:
 
 ```
 rtl/        SystemVerilog sources — accel_contract_pkg (the environment's),
-            sparse_cnn_pkg / sparse_mac_pe / sparse_cnn_axi (the example's)
+            then one group per example accelerator (sparse_cnn_*, relu_*)
 tb/         cocotb testbenches + pytest runners, one directory per seam
 flows/      synthesis flows — common/ (board map), embedded/, accel/
 scripts/    lint / format / regress / wave / sec + Vivado provisioning helpers
