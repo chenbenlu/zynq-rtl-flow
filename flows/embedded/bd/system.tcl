@@ -27,6 +27,7 @@ set_property -dict [list \
     CONFIG.PSU__SAXIGP2__DATA_WIDTH {32} \
     CONFIG.PSU__FPGA_PL0_ENABLE {1} \
     CONFIG.PSU__CRL_APB__PL0_REF_CTRL__FREQMHZ $pl_clk_mhz \
+    CONFIG.PSU__USE__IRQ0 {1} \
 ] $ps
 
 # --- Reset -------------------------------------------------------------------
@@ -81,6 +82,20 @@ connect_bd_net [get_bd_pins rst_pl/peripheral_aresetn] \
     [get_bd_pins mem_ic/aresetn] \
     [get_bd_pins dma/axi_resetn] \
     [get_bd_pins accel/aresetn]
+
+# --- Interrupt ---------------------------------------------------------------
+# Without this the DMA's completion interrupt reaches no GIC input, the device
+# tree the handoff generates carries no `interrupts` property, and the Linux
+# driver refuses to probe ("failed to get irq", -EINVAL) — the design looks
+# complete and place & route succeeds either way.
+#
+# pl_ps_irq0 is a vector sized by PSU__NUM_F2P0__INTR__INPUTS, which IP
+# Integrator derives from the connections made to the port and refuses to have
+# set (`Cannot set the parameter ... It is read-only`, a CRITICAL WARNING that
+# also keeps the synthesis run out of the cache). One source therefore gives a
+# one-bit port and connects directly; a second means driving the port from an
+# xlconcat and letting the width follow.
+connect_bd_net [get_bd_pins dma/mm2s_introut] [get_bd_pins ps/pl_ps_irq0]
 
 assign_bd_address
 validate_bd_design

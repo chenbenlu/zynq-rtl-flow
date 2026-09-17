@@ -7,9 +7,17 @@
 # the DMA's parameters have exactly one source. Hand-copying them here would put
 # a second, silently divergent copy of the address map in the repository.
 # =============================================================================
+import re
 import sys
 
 src, dst, firmware = sys.argv[1], sys.argv[2], sys.argv[3]
+
+# Labels the booted kernel's own device tree exports under __symbols__. A
+# reference to anything else resolves against nothing and the overlay is
+# rejected at load, reported as the overlay failing to apply rather than as the
+# symbol it could not find. Checked here so that a generator which starts
+# emitting a new reference stops the build instead of the board.
+RESOLVABLE = {"amba", "fpga_full", "gic", "zynqmp_clk", "zynqmp_reset"}
 
 body = open(src).read()
 
@@ -48,6 +56,69 @@ def child_nodes(text):
     return blocks
 
 
+def split_node(block):
+    """A node block split into its own property text and its sub-node blocks."""
+    body = block[block.index("{") + 1 : block.rindex("}")]
+    children = child_nodes(body)
+    own = body
+    for child in children:
+        own = own.replace(child, "")
+    return own, children
+
+
+def property_value(text, name):
+    match = re.search(r"\b%s\s*=\s*([^;]*);" % name, text)
+    return match.group(1) if match else None
+
+
+# An AXI DMA channel is a sub-node of the IP that owns it and shares that IP's
+# interrupt, but the generator numbers the two independently: with only mm2s
+# connected the IP node gets the line the block design actually drives and the
+# channel node gets the next one along, which nothing drives. The driver takes
+# the channel's, so it probes and then waits on a wire that never moves — a
+# completion timeout, not a probe failure, and nothing in it names the device
+# tree. The IP node's number is the trustworthy one because interrupt-names ties
+# it to the port on the block design, so each channel takes the entry named for
+# its direction rather than a number restated here.
+CHANNEL_INTERRUPT = {
+    "xlnx,axi-dma-mm2s-channel": "mm2s_introut",
+    "xlnx,axi-dma-s2mm-channel": "s2mm_introut",
+}
+
+
+def align_channel_interrupts(block):
+    own, children = split_node(block)
+    names = re.findall(r'"([^"]*)"', property_value(own, "interrupt-names") or "")
+    specs = re.findall(r"<([^>]*)>", property_value(own, "interrupts") or "")
+    by_name = dict(zip(names, specs))
+    if not by_name:
+        return block
+
+    for child in children:
+        compatible = property_value(child, "compatible")
+        if compatible is None:
+            continue
+        wanted = next(
+            (CHANNEL_INTERRUPT[c] for c in CHANNEL_INTERRUPT if '"%s"' % c in compatible),
+            None,
+        )
+        if wanted is None:
+            continue
+        if wanted not in by_name:
+            sys.exit(
+                "%s wants the %s interrupt and the IP node does not carry one"
+                % (child.split("{")[0].strip(), wanted)
+            )
+        fixed = re.sub(
+            r"\binterrupts\s*=\s*[^;]*;",
+            "interrupts = <%s>;" % by_name[wanted].strip(),
+            child,
+            count=1,
+        )
+        block = block.replace(child, fixed)
+    return block
+
+
 # The PL nodes are spliced directly into the live tree's AXI bus rather than kept
 # inside pl.dtsi's amba_pl container. An overlay that adds a bus node gets one
 # platform device for the bus and none for what is inside it: the kernel creates
@@ -57,6 +128,25 @@ def child_nodes(text):
 nodes = child_nodes(node_body(body, "amba_pl"))
 if not any("@" in block.split("{")[0] for block in nodes):
     sys.exit("no addressable nodes under amba_pl — check what the generator emitted")
+
+# The generated tree parents its interrupts on `imux`, a proxy interrupt
+# controller the system device tree defines so one tree can serve the A53, R5 and
+# PMU domains: it maps every interrupt 1:1 onto whichever GIC the domain has. A
+# booted Linux on the A53 has no such node, only `gic`. The specifier is already
+# the GIC's three-cell form and the map it passes through is the identity, so
+# this is the same interrupt, named the way the running kernel knows it.
+nodes = [block.replace("<&imux>", "<&gic>") for block in nodes]
+nodes = [align_channel_interrupts(block) for block in nodes]
+
+unresolved = sorted(
+    {label for block in nodes for label in re.findall(r"&([A-Za-z_][\w-]*)", block)}
+    - RESOLVABLE
+)
+if unresolved:
+    sys.exit(
+        "the generated tree references labels the board's device tree does not\n"
+        "export, so the overlay would be rejected at load: " + ", ".join(unresolved)
+    )
 
 with open(dst, "w") as fh:
     fh.write("/dts-v1/;\n/plugin/;\n\n")
