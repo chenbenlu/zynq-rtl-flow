@@ -1,10 +1,14 @@
 # Register map — `sparse_cnn_axi`
 
-The AXI4-Lite slave of the AXI-wrapped accelerator
-([rtl/sparse_cnn_axi.sv](../rtl/sparse_cnn_axi.sv)). This file is the
-specification a PS-side driver is written against: the testbench in
-[tb/sparse_cnn_axi/](../tb/sparse_cnn_axi/) checks the RTL against what is
-written here, so where the two disagree the RTL is wrong.
+The AXI4-Lite slave of one accelerator
+([rtl/sparse_cnn_axi.sv](../rtl/sparse_cnn_axi.sv)), the first implementation of
+[the accelerator contract](accelerator-contract.md). The contract fixes the
+probe — a 32-bit ID register at offset `0x00` — and nothing else; everything
+below is this design's own and changes with it.
+
+Within that scope this file is the specification a PS-side driver is written
+against: the testbench in [tb/sparse_cnn_axi/](../tb/sparse_cnn_axi/) checks the
+RTL against what is written here, so where the two disagree the RTL is wrong.
 
 All registers are 32 bits and aligned to 4 bytes. Offsets are from the base
 address the block design assigns to the accelerator (recorded in
@@ -26,12 +30,15 @@ software can confirm what it is talking to before it touches a control bit.
 
 | Bits | Value | Meaning |
 |------|-------|---------|
-| 31:16 | `0x5350` | `"SP"` — sparse CNN accelerator |
+| 31:16 | `0x5350` | `"SP"` — this design's tag |
 | 15:8 | `0x01` | Major version |
 | 7:0 | `0x00` | Minor version |
 
 Bump the major version when a change would break a driver written against this
 map; bump the minor version for additions that do not.
+
+`0x5350` identifies *this* accelerator. Another conforming accelerator carries
+its own tag at the same offset — that is how a driver tells them apart.
 
 ## `0x04` CTRL — control
 
