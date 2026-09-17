@@ -254,5 +254,8 @@ Issues live in GitHub Issues on `chenbenlu/zynq_cnn` (via the `gh` CLI). See `do
 ### Domain docs
 
 Single-context: [`CONTEXT.md`](CONTEXT.md) + [`docs/adr/`](docs/adr/) at the repo root.
-See `docs/agents/domain.md`. Three ADRs so far, all about the synthesis environment:
-persistent-disk install (0001), shared X socket (0002), direct-attached KV260 (0003).
+See `docs/agents/domain.md`. Five ADRs so far. Three cover the synthesis
+environment: persistent-disk install (0001), shared X socket (0002),
+direct-attached KV260 (0003). Two cover the board the design runs on: the ZCU104
+becoming this project's board (0004) and the accelerator's driver being in scope
+while the boot image is not (0005).
