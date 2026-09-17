@@ -1,9 +1,14 @@
 # CLAUDE.md — zynq_cnn
 
-Sparse CNN FPGA accelerator (Xilinx Zynq target). This repo is an **RTL
-simulation skeleton**: SystemVerilog RTL verified with cocotb on Verilator,
-all inside a pinned Docker toolchain image. See [README.md](README.md) and
-[docs/architecture.md](docs/architecture.md).
+An **environment** that carries a hand-written accelerator from SystemVerilog to
+a running design on a Xilinx Zynq UltraScale+ board — simulation (cocotb on
+Verilator, in a pinned Docker toolchain image), lint, sequential equivalence,
+synthesis, implementation, firmware overlay and a PS-side driver. A sparse CNN
+accelerator is the example that goes through it, not the point of it
+([ADR-0006](docs/adr/0006-the-deliverable-is-the-environment.md)). What a module
+must present to be carried is
+[docs/accelerator-contract.md](docs/accelerator-contract.md). See
+[README.md](README.md) and [docs/architecture.md](docs/architecture.md).
 
 ## How to run things
 
@@ -91,8 +96,11 @@ missing kernel, not the script.
 - `flows/` — synthesis flows: `common/` (board map incl. per-board PL clock
   target, shared env), `embedded/` (`bd/system.tcl` block design, `impl.tcl`,
   `xdc/<board>/`), `accel/`.
-- `docs/register-map.md` — the AXI4-Lite map. It is the specification, not a
-  description: the wrapper's tests check the RTL against it.
+- `docs/accelerator-contract.md` — what a module must present to get the flows.
+  The environment's specification; every conforming accelerator answers to it.
+- `docs/register-map.md` — `sparse_cnn_axi`'s AXI4-Lite map. The specification
+  for *that* accelerator, not a description: its tests check the RTL against it.
+  Another accelerator brings its own map.
 - `docker/Dockerfile` — multi-stage; Verilator built from source.
 - `docker/vivado.Dockerfile` — AMD toolchain runtime deps (toolchain itself is mounted).
 - `.devcontainer/devcontainer.json` — consumes the GHCR image (local `build`
@@ -282,8 +290,14 @@ Issues live in GitHub Issues on `chenbenlu/zynq_cnn` (via the `gh` CLI). See `do
 ### Domain docs
 
 Single-context: [`CONTEXT.md`](CONTEXT.md) + [`docs/adr/`](docs/adr/) at the repo root.
-See `docs/agents/domain.md`. Five ADRs so far. Three cover the synthesis
-environment: persistent-disk install (0001), shared X socket (0002),
-direct-attached KV260 (0003). Two cover the board the design runs on: the ZCU104
-becoming this project's board (0004) and the accelerator's driver being in scope
-while the boot image is not (0005).
+See `docs/agents/domain.md`. `CONTEXT.md` is in two halves — the environment's
+vocabulary, which is permanent, and the example design's, which goes when the
+example does.
+
+Six ADRs so far. Three cover the synthesis environment: persistent-disk install
+(0001), shared X socket (0002), direct-attached KV260 (0003). Two cover the
+board the design runs on: the ZCU104 becoming this project's board (0004) and
+the accelerator's driver being in scope while the boot image is not (0005). One
+covers what this repository is for: the environment is the deliverable and the
+accelerator is its first example (0006), which partially supersedes 0004 and
+corrects 0005's alternatives.
