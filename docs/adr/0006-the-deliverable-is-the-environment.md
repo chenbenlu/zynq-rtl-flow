@@ -5,8 +5,8 @@ ZCU104 with the sentence "`zynq_cnn` exists to put a sparse CNN accelerator in
 programmable logic; the PL is the deliverable, not a resource to find a use
 for". That is no longer what this repository is for. The deliverable is the
 environment that carries a hand-written accelerator from RTL to a running
-design on the board; the sparse MAC accelerator is its first example, and
-`relu_unit` will be its second.
+design on the board; the sparse MAC accelerator is its first example and the
+Leaky ReLU is its second.
 
 ## What forced the question
 
@@ -54,12 +54,28 @@ entirely, which is exactly the constraint `CONFIG_STRICT_DEVMEM=y` imposes.
 Neither touches an accelerator's own AXI4-Lite registers; that half stays ours
 and is reachable from userspace, as ADR-0005 established.
 
-So the driver splits along the same line the contract does. Its transport layer
-is generic and should be adopted rather than written, subject to one
-measurement: `xilinx_axidma` documents support for 4.x Xilinx kernels and this
-board runs `5.15.0-1015-xilinx-zynqmp`. Its register layer is per-design and
-stays here. ADR-0005's conclusion — that the driver is in scope — is unchanged;
-its premise that all of it had to be written is not.
+That survey was made without checking whether the driver had already been
+written, and it had: `driver/sparse_cnn.c` is a platform driver and a dmaengine
+client that allocates with `dma_alloc_coherent`, 289 lines, compiled on the
+board and loaded. The prior art it was measured against is the same shape and
+much larger, one of the two is a userspace library this design has no use for,
+and adopting either would trade a self-contained module for an out-of-tree
+dependency documented against 4.x kernels. **The existing driver stays.**
+
+What survives is the part that was actually missing. ADR-0005 weighed the wrong
+alternatives, and the right ones — had they been weighed — would have led to
+the same place for a better reason: what is generic here is the shape, not the
+code, and the shape is 289 lines.
+
+The line the alternatives do mark is inside the driver rather than around it. A
+dmaengine client that moves a tile is the same for every conforming
+accelerator; the registers it reads and the `compatible` string it binds to are
+not. `sparse_cnn.c` does both today, which is why a second accelerator cannot
+use it. Splitting it is work this decision makes necessary, not a decision in
+itself.
+
+ADR-0005's conclusion — that the driver is in scope — is unchanged, and so is
+its premise that it had to be written here.
 
 ## Considered and rejected
 
@@ -88,11 +104,11 @@ The accelerator contract becomes a document
 *the* specification.
 
 A second accelerator stops being optional. One implementation cannot
-distinguish a contract from a description of itself, so the claim this ADR
-makes is unfalsifiable until `relu_unit` — elementwise, stream-in/stream-out,
-with a writable parameter — has been through the whole flow. That work is
-larger than it sounds: it requires the block design's S2MM channel, a second
-register map and a return path in the driver.
+distinguish a contract from a description of itself, so `relu_axi` —
+elementwise, stream-in/stream-out, with a writable slope — exists to be the
+falsifier. It is verified in simulation; the rest of the flow it has to clear
+before this ADR's claim is more than a claim is the block design's S2MM channel
+and a return path in the driver.
 
 The repository keeps its name. `zynq_cnn`, the GHCR image and the Dev Container
 reference each other and the rename buys nothing a paragraph cannot. What does

@@ -60,8 +60,7 @@ _Avoid_: host driver, kernel driver, ROS node, application
 
 **Transport layer**:
 The half of the driver that moves a tile between memory and the accelerator's
-stream. Generic across accelerators, and therefore a candidate for adoption
-rather than authorship.
+stream. The same for every conforming accelerator, and therefore written once.
 _Avoid_: DMA driver, data path
 
 **Register layer**:
