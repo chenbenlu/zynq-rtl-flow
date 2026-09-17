@@ -80,6 +80,10 @@ def property_value(text, name):
 # tree. The IP node's number is the trustworthy one because interrupt-names ties
 # it to the port on the block design, so each channel takes the entry named for
 # its direction rather than a number restated here.
+# The block design drives the accelerator's stream from the DMA; this is the RTL
+# top level's name, which is how the generated tree identifies the node.
+STREAM_CLIENT_IP = "sparse_cnn_axi"
+
 CHANNEL_INTERRUPT = {
     "xlnx,axi-dma-mm2s-channel": "mm2s_introut",
     "xlnx,axi-dma-s2mm-channel": "s2mm_introut",
@@ -119,6 +123,45 @@ def align_channel_interrupts(block):
     return block
 
 
+# The generator models no connection between two PL IPs, so nothing in the tree
+# says the DMA's stream feeds the accelerator — and without a `dmas` property on
+# the client the kernel offers no way to ask for that channel. The fact is the
+# block design's, not a number restated here: there is one AXI DMA and one
+# accelerator, and the stream runs between them. Anything else is a design this
+# rule no longer describes, so it stops the build rather than guessing.
+def link_dma_client(nodes):
+    def labelled(block):
+        match = re.match(r"\s*([A-Za-z_][\w-]*)\s*:", block)
+        return match.group(1) if match else None
+
+    dmas = [b for b in nodes if '"xlnx,axi-dma' in (property_value(b, "compatible") or "")]
+    clients = [
+        b
+        for b in nodes
+        if (property_value(b, "xlnx,ip-name") or "") == '"%s"' % STREAM_CLIENT_IP
+    ]
+    if not dmas and not clients:
+        return nodes
+    if len(dmas) != 1 or len(clients) != 1:
+        sys.exit(
+            "expected one AXI DMA and one %s to connect the stream between; found"
+            " %d and %d" % (STREAM_CLIENT_IP, len(dmas), len(clients))
+        )
+
+    label = labelled(dmas[0])
+    if label is None:
+        sys.exit("the AXI DMA node carries no label to reference it by")
+
+    client = clients[0]
+    indent = re.match(r"(\s*)", client.splitlines()[1]).group(1)
+    linked = client.replace(
+        "{",
+        "{\n%sdmas = <&%s 0>;\n%sdma-names = \"tx\";" % (indent, label, indent),
+        1,
+    )
+    return [linked if b is client else b for b in nodes]
+
+
 # The PL nodes are spliced directly into the live tree's AXI bus rather than kept
 # inside pl.dtsi's amba_pl container. An overlay that adds a bus node gets one
 # platform device for the bus and none for what is inside it: the kernel creates
@@ -137,10 +180,17 @@ if not any("@" in block.split("{")[0] for block in nodes):
 # this is the same interrupt, named the way the running kernel knows it.
 nodes = [block.replace("<&imux>", "<&gic>") for block in nodes]
 nodes = [align_channel_interrupts(block) for block in nodes]
+nodes = link_dma_client(nodes)
 
+defined = {
+    label
+    for block in nodes
+    for label in re.findall(r"^\s*([A-Za-z_][\w-]*)\s*:", block, re.MULTILINE)
+}
 unresolved = sorted(
     {label for block in nodes for label in re.findall(r"&([A-Za-z_][\w-]*)", block)}
     - RESOLVABLE
+    - defined
 )
 if unresolved:
     sys.exit(
