@@ -1,5 +1,13 @@
 # The ZCU104 becomes this project's board
 
+> **Status:** partially superseded by
+> [ADR-0006](0006-the-deliverable-is-the-environment.md). The board decision and
+> everything that follows from it stand. The paragraph below that describes this
+> project's purpose — "the PL is the deliverable" — does not: the deliverable is
+> now the environment, and the accelerator is its first example. The paragraph is
+> left as written because the argument it makes about `amr_simulate` is the point
+> of this record.
+
 The ZCU104 in the lab was bought for a different project. `amr_simulate` evaluated
 it as the deployment platform for a BEV policy, then withdrew the case on
 2026-08-31 with the sentence "the board goes back on the shelf; no project
