@@ -7,9 +7,17 @@
 # the DMA's parameters have exactly one source. Hand-copying them here would put
 # a second, silently divergent copy of the address map in the repository.
 # =============================================================================
+import re
 import sys
 
 src, dst, firmware = sys.argv[1], sys.argv[2], sys.argv[3]
+
+# Labels the booted kernel's own device tree exports under __symbols__. A
+# reference to anything else resolves against nothing and the overlay is
+# rejected at load, reported as the overlay failing to apply rather than as the
+# symbol it could not find. Checked here so that a generator which starts
+# emitting a new reference stops the build instead of the board.
+RESOLVABLE = {"amba", "fpga_full", "gic", "zynqmp_clk", "zynqmp_reset"}
 
 body = open(src).read()
 
@@ -57,6 +65,24 @@ def child_nodes(text):
 nodes = child_nodes(node_body(body, "amba_pl"))
 if not any("@" in block.split("{")[0] for block in nodes):
     sys.exit("no addressable nodes under amba_pl — check what the generator emitted")
+
+# The generated tree parents its interrupts on `imux`, a proxy interrupt
+# controller the system device tree defines so one tree can serve the A53, R5 and
+# PMU domains: it maps every interrupt 1:1 onto whichever GIC the domain has. A
+# booted Linux on the A53 has no such node, only `gic`. The specifier is already
+# the GIC's three-cell form and the map it passes through is the identity, so
+# this is the same interrupt, named the way the running kernel knows it.
+nodes = [block.replace("<&imux>", "<&gic>") for block in nodes]
+
+unresolved = sorted(
+    {label for block in nodes for label in re.findall(r"&([A-Za-z_][\w-]*)", block)}
+    - RESOLVABLE
+)
+if unresolved:
+    sys.exit(
+        "the generated tree references labels the board's device tree does not\n"
+        "export, so the overlay would be rejected at load: " + ", ".join(unresolved)
+    )
 
 with open(dst, "w") as fh:
     fh.write("/dts-v1/;\n/plugin/;\n\n")
