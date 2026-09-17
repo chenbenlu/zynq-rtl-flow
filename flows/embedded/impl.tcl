@@ -14,6 +14,7 @@ set board      $::env(BOARD)
 set xdc_dir    $::env(XDC_DIR)
 set system_tcl $::env(SYSTEM_TCL)
 set pl_clk_mhz $::env(PL_CLK_MHZ)
+set rtl_top    $::env(RTL_TOP)
 set sources    [split $::env(RTL_SOURCE_LIST) " "]
 set jobs       $::env(IMPL_JOBS)
 
@@ -112,6 +113,9 @@ if {![string is double -strict $wns]} {
 set fh [open $out_dir/impl_summary.txt w]
 puts $fh "board         $board"
 puts $fh "part          $part"
+# Which accelerator this is. RTL_TOP selects it, so two runs of this flow differ
+# in more than their numbers and a summary that omits it names nothing.
+puts $fh "accelerator   $rtl_top"
 puts $fh "target        $pl_clk_mhz MHz ([format %.3f $target_period] ns)"
 puts $fh "clock         $clk_label"
 # A design with no clocks has no slack to report, and STATS.WNS is 0 for it —
@@ -134,9 +138,10 @@ if {[string is double -strict $wns]} {
   puts $fh "timing met    unknown"
 }
 puts $fh ""
-puts $fh "Whole-design utilization is in utilization_impl.rpt; the accelerator's"
-puts $fh "own share — the number to compare against the PE's 100-LUT OOC"
-puts $fh "baseline — is the sparse_cnn_axi row of utilization_hier.rpt."
+puts $fh "Whole-design utilization is in utilization_impl.rpt. The accelerator's own"
+puts $fh "share is the 'accel' row of utilization_hier.rpt — the block design's cell"
+puts $fh "name, which does not move when RTL_TOP does. Compare it against the same"
+puts $fh "module's out-of-context figure from make synth."
 close $fh
 
 puts ""
