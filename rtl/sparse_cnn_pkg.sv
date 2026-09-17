@@ -1,7 +1,8 @@
 // =============================================================================
 // sparse_cnn_pkg
-// Shared parameters and types for the Sparse CNN accelerator skeleton.
-// Centralising widths here keeps the RTL and (future) PE array consistent.
+// Widths belonging to the sparse CNN accelerator alone — the example design,
+// not the environment. Anything a second accelerator would also need lives in
+// accel_contract_pkg instead.
 // =============================================================================
 package sparse_cnn_pkg;
 

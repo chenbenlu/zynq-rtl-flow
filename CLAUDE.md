@@ -1,9 +1,14 @@
 # CLAUDE.md — zynq_cnn
 
-Sparse CNN FPGA accelerator (Xilinx Zynq target). This repo is an **RTL
-simulation skeleton**: SystemVerilog RTL verified with cocotb on Verilator,
-all inside a pinned Docker toolchain image. See [README.md](README.md) and
-[docs/architecture.md](docs/architecture.md).
+An **environment** that carries a hand-written accelerator from SystemVerilog to
+a running design on a Xilinx Zynq UltraScale+ board — simulation (cocotb on
+Verilator, in a pinned Docker toolchain image), lint, sequential equivalence,
+synthesis, implementation, firmware overlay and a PS-side driver. A sparse CNN
+accelerator is the example that goes through it, not the point of it
+([ADR-0006](docs/adr/0006-the-deliverable-is-the-environment.md)). What a module
+must present to be carried is
+[docs/accelerator-contract.md](docs/accelerator-contract.md). See
+[README.md](README.md) and [docs/architecture.md](docs/architecture.md).
 
 ## How to run things
 
@@ -17,7 +22,7 @@ different container, on one machine only** — see "Two containers" below.
 
 ```bash
 make lint          # Verilator --lint-only -Wall + verible-verilog-lint
-make sim           # build + run cocotb suite via pytest (2 seams, 20 tests, must stay green)
+make sim           # build + run cocotb suite via pytest (3 seams, 31 tests, must stay green)
 make test-scripts  # bash tests for scripts/ (no RTL toolchain, no root, no hardware)
 make coverage      # Python (pytest-cov) + RTL (verilator_coverage) -> sim/coverage/
 make sec GOLDEN=HEAD   # sequential equivalence check vs a reference revision
@@ -74,13 +79,14 @@ missing kernel, not the script.
 
 ## Layout
 
-- `rtl/` — SystemVerilog. `sparse_cnn_pkg.sv` (widths), `sparse_mac_pe.sv` (the
-  PE) and `sparse_cnn_axi.sv` (the AXI-wrapped top level, and the default
-  `RTL_TOP`).
+- `rtl/` — SystemVerilog. `accel_contract_pkg.sv` is the environment's; the rest
+  belongs to one of the two example accelerators: `sparse_cnn_pkg` /
+  `sparse_mac_pe` / `sparse_cnn_axi` (the default `RTL_TOP`) and `relu_pkg` /
+  `relu_unit` / `relu_axi`.
 - `tb/<dut>/tb_<dut>.py` — cocotb coroutines.
 - `tb/<dut>/test_<dut>.py` — pytest entry; cocotb 2.x `cocotb_tools.runner`.
-- `tb/model/sparse_mac_model.py` — the numpy golden model and operand generator,
-  shared by both seams. One definition of correct behaviour, imported, never copied.
+- `tb/model/` — the numpy golden models, one per accelerator, imported by its
+  seams and never copied into one.
 - `tb/conftest.py` — adds each `tb/<dut>/` to `sys.path`.
 - `tests/` — `test-*.sh`, bash tests for the scripts that cannot be exercised
   for real (`provision-board-net.sh` reconfigures the build host's own NICs).
@@ -91,8 +97,11 @@ missing kernel, not the script.
 - `flows/` — synthesis flows: `common/` (board map incl. per-board PL clock
   target, shared env), `embedded/` (`bd/system.tcl` block design, `impl.tcl`,
   `xdc/<board>/`), `accel/`.
-- `docs/register-map.md` — the AXI4-Lite map. It is the specification, not a
-  description: the wrapper's tests check the RTL against it.
+- `docs/accelerator-contract.md` — what a module must present to get the flows.
+  The environment's specification; every conforming accelerator answers to it.
+- `docs/register-map.md`, `docs/register-map-relu.md` — one AXI4-Lite map per
+  accelerator. Each is the specification for *that* accelerator, not a
+  description: its tests check the RTL against it.
 - `docker/Dockerfile` — multi-stage; Verilator built from source.
 - `docker/vivado.Dockerfile` — AMD toolchain runtime deps (toolchain itself is mounted).
 - `.devcontainer/devcontainer.json` — consumes the GHCR image (local `build`
@@ -282,8 +291,14 @@ Issues live in GitHub Issues on `chenbenlu/zynq_cnn` (via the `gh` CLI). See `do
 ### Domain docs
 
 Single-context: [`CONTEXT.md`](CONTEXT.md) + [`docs/adr/`](docs/adr/) at the repo root.
-See `docs/agents/domain.md`. Five ADRs so far. Three cover the synthesis
-environment: persistent-disk install (0001), shared X socket (0002),
-direct-attached KV260 (0003). Two cover the board the design runs on: the ZCU104
-becoming this project's board (0004) and the accelerator's driver being in scope
-while the boot image is not (0005).
+See `docs/agents/domain.md`. `CONTEXT.md` is in two halves — the environment's
+vocabulary, which is permanent, and the example design's, which goes when the
+example does.
+
+Six ADRs so far. Three cover the synthesis environment: persistent-disk install
+(0001), shared X socket (0002), direct-attached KV260 (0003). Two cover the
+board the design runs on: the ZCU104 becoming this project's board (0004) and
+the accelerator's driver being in scope while the boot image is not (0005). One
+covers what this repository is for: the environment is the deliverable and the
+accelerator is its first example (0006), which partially supersedes 0004 and
+corrects 0005's alternatives.

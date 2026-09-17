@@ -38,6 +38,8 @@ OUT_DIR="${OUT_DIR:-$BUILD_DIR/$BOARD/impl}"
 PL_CLK_MHZ="${PL_CLK_MHZ:-$BOARD_PL_CLK_MHZ}"
 IMPL_JOBS="${IMPL_JOBS:-$(nproc)}"
 export BOARD BOARD_PART BOARD_FILE OUT_DIR SYSTEM_TCL XDC_DIR PL_CLK_MHZ IMPL_JOBS
+# The block design instantiates whichever top scripts/rtl_sources.sh names.
+export RTL_TOP
 abs_sources=()
 for src in "${RTL_SOURCES[@]}"; do abs_sources+=("$ROOT/$src"); done
 export RTL_SOURCE_LIST="${abs_sources[*]}"

@@ -1,5 +1,11 @@
 # The accelerator's driver is in scope
 
+> **Status:** corrected in part by
+> [ADR-0006](0006-the-deliverable-is-the-environment.md). The decision stands —
+> the driver is in scope. The alternatives weighed below are incomplete: they
+> miss the dmaengine clients that already exist, so the driver's transport layer
+> is a candidate for adoption rather than something that has to be written here.
+
 [ADR-0004](0004-zcu104-is-this-projects-board.md) removed the boot-image path from
 this repository with the sentence "the PS side is not ours to build". Read
 literally that also excludes the software that *operates* the accelerator, which

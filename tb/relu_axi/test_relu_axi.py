@@ -1,8 +1,8 @@
-"""pytest entry point for the sparse_cnn_axi cocotb suite.
+"""pytest entry point for the relu_axi cocotb suite.
 
-Same shape as the sparse_mac_pe runner: build the wrapper with Verilator via
-the cocotb 2.x Python runner, then run the coroutine tests in
-``tb_sparse_cnn_axi``. Artifacts land under ``sim/sparse_cnn_axi``.
+Same shape as the other seams: build the accelerator with Verilator via the
+cocotb 2.x Python runner, then run the coroutine tests in ``tb_relu_axi``.
+Artifacts land under ``sim/relu_axi``.
 """
 
 from __future__ import annotations
@@ -16,20 +16,20 @@ from cocotb_tools.runner import get_runner
 THIS_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = THIS_DIR.parents[1]
 MODEL_DIR = PROJECT_ROOT / "tb" / "model"
-SIM_BUILD = PROJECT_ROOT / "sim" / "sparse_cnn_axi"
+SIM_BUILD = PROJECT_ROOT / "sim" / "relu_axi"
 
 # Importable whether pytest loaded tb/conftest.py or this file was run directly.
 sys.path.insert(0, str(PROJECT_ROOT / "tb"))
 
 from rtl_sources import sources_for  # noqa: E402
 
-HDL_TOPLEVEL = "sparse_cnn_axi"
-TEST_MODULE = "tb_sparse_cnn_axi"
+HDL_TOPLEVEL = "relu_axi"
+TEST_MODULE = "tb_relu_axi"
 
 SOURCES = sources_for(HDL_TOPLEVEL)
 
 
-def test_sparse_cnn_axi() -> None:
+def test_relu_axi() -> None:
     sim = os.getenv("SIM", "verilator")
     runner = get_runner(sim)
 
@@ -55,5 +55,5 @@ def test_sparse_cnn_axi() -> None:
 
 
 if __name__ == "__main__":
-    test_sparse_cnn_axi()
+    test_relu_axi()
     sys.exit(0)

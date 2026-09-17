@@ -19,17 +19,18 @@ from cocotb_tools.runner import get_runner
 
 THIS_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = THIS_DIR.parents[1]
-RTL_DIR = PROJECT_ROOT / "rtl"
 MODEL_DIR = PROJECT_ROOT / "tb" / "model"
 SIM_BUILD = PROJECT_ROOT / "sim" / "sparse_mac_pe"
+
+# Importable whether pytest loaded tb/conftest.py or this file was run directly.
+sys.path.insert(0, str(PROJECT_ROOT / "tb"))
+
+from rtl_sources import sources_for  # noqa: E402
 
 HDL_TOPLEVEL = "sparse_mac_pe"
 TEST_MODULE = "tb_sparse_mac_pe"
 
-SOURCES = [
-    RTL_DIR / "sparse_cnn_pkg.sv",
-    RTL_DIR / "sparse_mac_pe.sv",
-]
+SOURCES = sources_for(HDL_TOPLEVEL)
 
 
 def test_sparse_mac_pe() -> None:

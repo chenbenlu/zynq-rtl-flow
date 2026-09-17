@@ -1,14 +1,30 @@
-# zynq_cnn — Sparse CNN Accelerator Simulation Skeleton
+# zynq_cnn — an accelerator environment for Zynq UltraScale+
 
-A reproducible, automated RTL simulation environment for a sparse convolutional
-neural-network accelerator targeting a Xilinx **Zynq** SoC. The whole toolchain
+An environment that carries a hand-written accelerator from SystemVerilog to a
+running design on an AMD Zynq UltraScale+ board: simulation, lint, coverage,
+sequential equivalence, out-of-context synthesis, a block design, place & route,
+a bitstream, a firmware overlay and a PS-side driver. The simulation toolchain
 (Verilator, cocotb, Verible, GTKWave) lives inside a Docker image so local
-development, Dev Containers, and CI all run the *exact same* environment.
+development, Dev Containers and CI all run the *exact same* environment; the AMD
+toolchain runs in a second container on one machine.
 
-The skeleton ships with one working, verified example — a **sparse MAC
-processing element** with zero-skip — plus a cocotb testbench, lint, coverage,
-waveform, and GitHub Actions regression. It is a foundation to grow a full
-accelerator on, not a finished design.
+**The environment is the deliverable**
+([ADR-0006](docs/adr/0006-the-deliverable-is-the-environment.md)). What a module
+must present to be carried through it is
+[docs/accelerator-contract.md](docs/accelerator-contract.md) — a clock, an
+AXI4-Lite slave with an ID register, an AXI4-Stream slave, and optionally a
+stream master.
+
+Two accelerators go through it today, chosen to be the opposite shapes: a
+**sparse MAC** that reduces a tile to an accumulator and reports it in a
+register, and a **Leaky ReLU** that transforms a tile beat by beat and sends it
+back out on a stream, with a writable slope. Each has a numpy golden model and a
+cocotb seam; neither is the point of the repository.
+
+Which parts travel: everything under `make regress` runs anywhere Docker does.
+Synthesis and everything after it do not — they need the build host, its
+node-locked licence and, for the last step, a board on a network segment CI
+cannot reach.
 
 ## Toolchain (pinned)
 
@@ -43,7 +59,7 @@ accelerator on, not a finished design.
 
    ```bash
    make lint      # Verilator strict lint + Verible
-   make sim       # build + run the cocotb suite (18 tests, 2 seams)
+   make sim       # build + run the cocotb suite (31 tests, 3 seams)
    make coverage  # Python + RTL coverage -> sim/coverage/
    make wave      # open the latest waveform (needs X11, see below)
    make regress   # lint -> sim -> coverage (what CI runs)
@@ -248,18 +264,23 @@ Two GitHub Actions workflows:
 ## Project layout
 
 ```
-rtl/        SystemVerilog sources (sparse_cnn_pkg, sparse_mac_pe, sparse_cnn_axi)
-tb/         cocotb testbenches + pytest runners
+rtl/        SystemVerilog sources — accel_contract_pkg (the environment's),
+            then one group per example accelerator (sparse_cnn_*, relu_*)
+tb/         cocotb testbenches + pytest runners, one directory per seam
 flows/      synthesis flows — common/ (board map), embedded/, accel/
-scripts/    lint / format / regress / wave + Vivado provisioning helpers
+scripts/    lint / format / regress / wave / sec + Vivado provisioning helpers
+            rtl_sources.sh is the single source list every consumer reads
 docker/     Dockerfile (simulation) + vivado.Dockerfile (synthesis)
 sim/        simulation artifacts, waveforms, coverage (gitignored)
 build/      synthesis + implementation artifacts (gitignored)
-docs/       architecture notes, register map, extension guide, ADRs
-CONTEXT.md  project glossary
+docs/       the accelerator contract, architecture notes, a register map per
+            accelerator, ADRs
+CONTEXT.md  project glossary, in two halves: the environment and the example
 ```
 
-See [docs/architecture.md](docs/architecture.md) for the data flow and how to
-extend the single PE into a PE array, and
-[docs/register-map.md](docs/register-map.md) for the interface a PS-side driver
-is written against.
+Start with [docs/accelerator-contract.md](docs/accelerator-contract.md) — it is
+what the flows are built around.
+[docs/architecture.md](docs/architecture.md) has the data flow and how to extend
+the single PE into a PE array;
+[docs/register-map.md](docs/register-map.md) is the example accelerator's own
+interface, the one its PS-side driver is written against.
