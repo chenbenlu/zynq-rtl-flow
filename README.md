@@ -170,16 +170,62 @@ the PMU firmware and the device tree are generated from, so it is the first
 artefact the PS-side boot flow needs; the bitstream is a separate file beside it
 rather than packaged inside (see the gotcha in CLAUDE.md).
 
+`make overlay` packages the bitstream and the generated PL device tree into a
+firmware overlay — what a running Linux loads through the ZynqMP FPGA manager.
+The device-tree nodes are not written by hand; they come from the same hardware
+handoff as everything else, so the accelerator's address has one source.
+
 The acceleration-flow targets (`make hls`, `make xclbin`) still depend on work
 that has not been done yet — an HLS kernel and a platform — and each says
 exactly what it is waiting for.
+
+### Loading it on the ZCU104
+
+The build host cannot reach the board: it is on the server VLAN and the board is
+on the workstation one. The overlay is therefore built on the build host and
+copied through a machine that can see both.
+
+```bash
+# from a workstation that reaches both
+ssh rtxws 'cd zynq_cnn/build/zcu104/overlay && tar czf - zcu104-sparse-cnn' |
+  ssh zcu104 'cat > /tmp/overlay.tgz'
+
+ssh zcu104 '
+  sudo tar xzf /tmp/overlay.tgz -C /lib/firmware/xilinx
+  D=/lib/firmware/xilinx/zcu104-sparse-cnn
+  sudo fpgautil -b $D/zcu104-sparse-cnn.bit.bin -o $D/zcu104-sparse-cnn.dtbo'
+```
+
+The accelerator then appears as a platform device and answers on the bus:
+
+```
+$ ls /sys/bus/platform/devices/ | grep a0
+a0000000.sparse_cnn_axi
+a0010000.dma
+
+$ sudo python3 -c 'import mmap,os,struct
+fd=os.open("/dev/mem",os.O_RDONLY|os.O_SYNC)
+m=mmap.mmap(fd,0x1000,mmap.MAP_SHARED,mmap.PROT_READ,offset=0xA0000000)
+print(hex(struct.unpack("<I",m[0:4])[0]))'
+0x53500100
+```
+
+`0x53500100` is the ID register [docs/register-map.md](docs/register-map.md)
+specifies — the first check that the thing on the bus is the design that was
+built. To unload, `sudo rmdir /sys/kernel/config/device-tree/overlays/full`.
 
 ### Target boards
 
 | Board | Device | Programmed via |
 |-------|--------|----------------|
 | KV260 (primary) | ZU5EV | SD-card boot + firmware overlay from Linux |
-| ZCU104 | ZU7EV | traditional PetaLinux flow |
+| ZCU104 | ZU7EV | firmware overlay into a booted Ubuntu 22.04 |
+
+The ZCU104 is the board the design runs on today, because it is the one with a
+booted PS — Ubuntu 22.04 with ROS 2 Humble, installed by an earlier project that
+has since released the board ([ADR-0004](docs/adr/0004-zcu104-is-this-projects-board.md)).
+Nothing in this repository builds that image, and nothing needs to: the
+programmable logic is loaded into the running system rather than at boot.
 
 Both devices are covered by the free Vivado ML Standard Edition; no licence
 purchase is needed. The KV260 is cabled directly to the build host's second NIC
