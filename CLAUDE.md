@@ -31,6 +31,8 @@ make synth         # OOC synthesis of one module -> build/<board>/ooc/ (BOARD=, 
 make impl          # place & route the system design -> build/<board>/impl/
 make bitstream     # .bit/.bin from the routed checkpoint
 make xsa           # hardware handoff for the PS-side boot flow -> build/<board>/impl/<board>.xsa
+make boot          # FSBL + PMU firmware + device tree from the handoff
+make overlay       # bitstream + device tree overlay -> build/<board>/overlay/<app>/
 make hls           # Vitis HLS kernel -> .xo  (KERNEL=)
 make xclbin        # v++ link -> .xclbin
 make vivado-image  # build the Vivado container (run on the build host)
@@ -222,6 +224,19 @@ Python **3.12** · Ubuntu **24.04**. Versions live in
   `.bit` sits beside the `.xsa` and bootgen is handed both. Adding `-include_bit` means
   first making `impl` run all the way through bitstream generation, which is a different
   flow, not a missing switch.
+- **An overlay that adds a bus node gets one device, and none for its children.**
+  The generated `pl.dtsi` wraps everything in an `amba_pl` container with
+  `compatible = "simple-bus"`. Applied as written, the kernel creates a platform
+  device for `amba_pl` and stops: it creates a device per *added* node and does not
+  recurse into a bus handed to it at runtime. The accelerator is then in
+  `/sys/firmware/devicetree` and on no bus at all, which looks like a driver problem
+  rather than a packaging one. `flows/embedded/overlay.py` therefore splices the
+  container's children directly under `&amba`, dropping the container.
+- **The FPGA manager does not take `write_bitstream -bin_file` output.** `make
+  bitstream` writes `<board>.bin` alongside the `.bit`; the manager wants the file
+  bootgen produces from a `[destination_device = pl]` BIF, which is the same size and
+  a different format. `make overlay` runs bootgen for this reason. Handing over the
+  wrong `.bin` fails at load, not at build.
 - **The KV260 is not on the lab network.** It hangs off the build host's second NIC on
   a private segment (ADR-0003) — the router has no free port, and the workstation VLAN
   blocks the server→workstation direction this flow needs. `192.168.100.x` on `RTXWS`

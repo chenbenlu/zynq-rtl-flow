@@ -28,7 +28,7 @@ SEC_DEPTH   ?= 20
 export GOLDEN REVISED SEC_ENGINE SEC_DEPTH
 
 .PHONY: all lint sim test-scripts wave coverage sec format format-check regress clean clean-synth help \
-        synth impl bitstream xsa boot hls xclbin vivado-shell vivado-gui vivado-image
+        synth impl bitstream xsa boot overlay hls xclbin vivado-shell vivado-gui vivado-image
 
 all: regress
 
@@ -99,6 +99,10 @@ xsa:
 ## boot: FSBL + PMU firmware + device tree from the hardware handoff
 boot:
 	@bash flows/embedded/boot.sh
+
+## overlay: package bitstream + device tree as a firmware overlay for a booted PS
+overlay:
+	@bash flows/embedded/overlay.sh
 
 ## --- Synthesis: acceleration flow (HLS kernel -> xclbin) ---
 
