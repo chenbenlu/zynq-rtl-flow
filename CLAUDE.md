@@ -139,6 +139,13 @@ Python **3.12** · Ubuntu **24.04**. Versions live in
 - Behaviour-preserving RTL change (retiming, operator rewrite): prove it with
   `make sec GOLDEN=HEAD` rather than trusting the directed tests.
   `SEC_ENGINE=miter` when the state encoding changed.
+- Behaviour-preserving block-design change (a width or a cell reference derived
+  from the environment rather than written into `bd/system.tcl`): `make sec`
+  reads RTL and cannot see it. Compare `Synth Design complete | Checksum:` in
+  `$OUT_DIR/vivado.log` — one line per run, the top-level design's — between two
+  runs on the same part. Equal checksums mean the same netlist; equal utilisation
+  and WNS only mean the two designs cost the same. Give the second run its own
+  `OUT_DIR=` or it overwrites the log you are comparing against.
 - cocotb 2.x API: `Clock(..., unit="ns")` (not `units`), runner imports from
   `cocotb_tools.runner`, `build(sources=[...])`. Read signed signals via the
   helpers in `tb_sparse_mac_pe.py` (cocotb value-accessor names vary).
