@@ -31,7 +31,8 @@ module sparse_cnn_axi #(
     // elaboration check below, which fails the build if the two drift apart.
     parameter int unsigned DATA_W = 8,
 
-    // The control interface's own widths.
+    // The control interface's own widths. Fixed by the accelerator contract and
+    // restated here for the same reason DATA_W is — checked below.
     parameter int unsigned AXIL_DATA_W = 32,
     parameter int unsigned AXIL_ADDR_W = 8
 ) (
@@ -79,6 +80,22 @@ module sparse_cnn_axi #(
     );
   end
 
+  if (AXIL_DATA_W != accel_contract_pkg::AXIL_DATA_W) begin : gen_axil_data_w_check
+    $error(
+        "AXIL_DATA_W (%0d) does not match the accelerator contract (%0d)",
+        AXIL_DATA_W,
+        accel_contract_pkg::AXIL_DATA_W
+    );
+  end
+
+  if (AXIL_ADDR_W != accel_contract_pkg::AXIL_ADDR_W) begin : gen_axil_addr_w_check
+    $error(
+        "AXIL_ADDR_W (%0d) does not match the accelerator contract (%0d)",
+        AXIL_ADDR_W,
+        accel_contract_pkg::AXIL_ADDR_W
+    );
+  end
+
   // The remaining widths are internal — they appear nowhere in the header, so
   // they are read from the package directly.
   localparam int unsigned DataW = DATA_W;
@@ -89,7 +106,7 @@ module sparse_cnn_axi #(
 
   // Register offsets. Decoding the full byte address (rather than a word index)
   // keeps unaligned accesses landing on the default arm instead of aliasing.
-  localparam logic [AXIL_ADDR_W-1:0] RegId = 'h00;
+  localparam logic [AXIL_ADDR_W-1:0] RegId = AXIL_ADDR_W'(accel_contract_pkg::REG_ID_OFFSET);
   localparam logic [AXIL_ADDR_W-1:0] RegCtrl = 'h04;
   localparam logic [AXIL_ADDR_W-1:0] RegStatus = 'h08;
   localparam logic [AXIL_ADDR_W-1:0] RegAcc = 'h0C;
@@ -102,8 +119,8 @@ module sparse_cnn_axi #(
   localparam int unsigned StatusDone = 1;
 
   // Software reads this before writing anything to confirm what it is talking
-  // to: "SP" (sparse accelerator) then major, minor.
-  localparam logic [31:0] IdValue = {16'h5350, 8'd1, 8'd0};
+  // to. The tag is this design's; the layout is the contract's.
+  localparam logic [31:0] IdValue = accel_contract_pkg::id_value(16'h5350, 8'd1, 8'd0);
 
   localparam logic [AXIL_DATA_W-1:0] CtrlReset = AXIL_DATA_W'(1) << CtrlEn;
 
