@@ -233,6 +233,12 @@ Python **3.12** · Ubuntu **24.04**. Versions live in
   hangs long after the work is done — which looks exactly like the tool itself hanging.
   Redirect the tool's output to a file in the mounted workspace and read it from the host
   afterwards, rather than trying to diagnose a stall that is not one.
+- **Vivado echoes a `-source`d script into its log as it reads it**, each line commented
+  out, so waiting on that log for a marker matches the script's own text long before the
+  run reaches it: `grep 'Reports in'` says `make impl` finished while it is still
+  placing. Match the leading `>> ` that only the real `puts` carries. `Exiting Vivado` is
+  no better a marker — the block design's out-of-context runs are separate Vivado
+  processes whose logs land in the same file, so it appears three times per `make impl`.
 - **`write_hw_platform -include_bit` takes the bitstream from the implementation run**,
   not from a file. This repo writes the bitstream from the routed checkpoint
   (`bitstream.tcl`), so the run holds none and the export aborts with `Unable to get BIT
