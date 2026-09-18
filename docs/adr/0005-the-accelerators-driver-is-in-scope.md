@@ -17,8 +17,9 @@ design. A boot image is a property of the board: it decides what operating syste
 runs, and the board already has one that someone else installed. A driver is a
 property of the design: it exists because `sparse_cnn_axi` presents a particular
 register map and a particular stream interface, and it changes when those change.
-[docs/register-map.md](../register-map.md) has been written as the specification a
-PS-side driver is held to since before there was a board to run on, and the cocotb
+[docs/register-map-sparse-cnn.md](../register-map-sparse-cnn.md) has been written
+as the specification a PS-side driver is held to since before there was a board
+to run on, and the cocotb
 testbenches check the RTL against it. A driver that answers to the same document
 is the second half of a contract this repository already owns, not a new scope.
 

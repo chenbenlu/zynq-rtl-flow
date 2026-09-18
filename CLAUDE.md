@@ -89,9 +89,11 @@ missing kernel, not the script.
   seams and never copied into one.
 - `tb/conftest.py` — adds each `tb/<dut>/` to `sys.path`.
 - `tests/` — `test-*.sh`, bash tests for the scripts that cannot be exercised
-  for real (`provision-board-net.sh` reconfigures the build host's own NICs).
-  They stub the command the script acts through and assert on what it tried to
-  do; `make test-scripts` runs them anywhere bash does.
+  for real (`provision-board-net.sh` reconfigures the build host's own NICs;
+  `boot.sh` and `overlay.py` need the AMD toolchain and a routed design).
+  They stub what the script acts through — a command, or the generated device
+  tree — and assert on what it tried to do; `make test-scripts` runs them
+  anywhere bash does.
 - `scripts/` — lint / format / regress / wave / sec.
   `rtl_sources.sh` holds the RTL source list shared by lint, sec and the synthesis flows.
 - `flows/` — synthesis flows: `common/` (board map incl. per-board PL clock
@@ -99,9 +101,13 @@ missing kernel, not the script.
   `xdc/<board>/`), `accel/`.
 - `docs/accelerator-contract.md` — what a module must present to get the flows.
   The environment's specification; every conforming accelerator answers to it.
-- `docs/register-map.md`, `docs/register-map-relu.md` — one AXI4-Lite map per
-  accelerator. Each is the specification for *that* accelerator, not a
+- `docs/register-map-sparse-cnn.md`, `docs/register-map-relu.md` — one AXI4-Lite
+  map per accelerator. Each is the specification for *that* accelerator, not a
   description: its tests check the RTL against it.
+- `driver/` — the PS-side driver, in two layers: `accel_transport.{c,h}` is the
+  contract's and moves tiles for any conforming accelerator; `sparse_cnn.c` and
+  `relu.c` are one register map each. Three `.ko`s, built on the board.
+  `run-tile.py` checks either one against `tb/model/`.
 - `docker/Dockerfile` — multi-stage; Verilator built from source.
 - `docker/vivado.Dockerfile` — AMD toolchain runtime deps (toolchain itself is mounted).
 - `.devcontainer/devcontainer.json` — consumes the GHCR image (local `build`
@@ -285,7 +291,16 @@ Python **3.12** · Ubuntu **24.04**. Versions live in
 - **The generated tree describes no connection between two PL IPs.** Nothing in it says
   the DMA's stream feeds the accelerator, and without a `dmas` property on the client
   the kernel offers no way to ask for that channel. `overlay.py` adds it, derived from
-  there being one AXI DMA and one accelerator rather than restated.
+  there being one AXI DMA and one accelerator rather than restated — and one entry per
+  channel sub-node the DMA actually carries, so an accelerator with an `m_axis` gets
+  `"tx", "rx"` and one without gets `"tx"` alone.
+- **A completed AXI DMA descriptor reports no residue.** `dmaengine_tx_status()` on a
+  cookie that has finished returns through `dma_cookie_status()`, which sets residue to
+  zero before the AXI DMA driver's own calculation is reached. So a receive transfer
+  that ended early on an unexpected `tlast` is indistinguishable from one that filled
+  the buffer, and the driver cannot learn the result's length from the transfer. What
+  catches a short tile is the accelerator's own beat count (`relu_axi`'s `COUNT`),
+  which is why the contract's optional stream master is paired with one.
 - **The board's kernel is built with `CONFIG_STRICT_DEVMEM=y`.** `/dev/mem` maps the
   accelerator's AXI4-Lite registers, which are device memory, but not the system memory
   a DMA descriptor points at — so reading `ACC`/`SKIP` from userspace works and

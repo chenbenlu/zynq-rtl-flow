@@ -8,9 +8,9 @@ transport layer without writing any of them; a module that does not conform is
 still simulated and linted, but everything downstream of the block design is
 its own problem.
 
-This document is the specification. `docs/register-map.md` is not — it is one
-conforming accelerator's register map, the first implementation of what is
-written here.
+This document is the specification. `docs/register-map-sparse-cnn.md` is not —
+it is one conforming accelerator's register map, the first implementation of
+what is written here.
 
 ## Required
 
@@ -140,23 +140,27 @@ look for something that cannot exist.
 
 ## What a conforming accelerator still has to supply
 
-The contract covers the hardware boundary. Four things sit outside it and are
+The contract covers the hardware boundary. Five things sit outside it and are
 per-design by nature:
 
 1. **Its register map**, as a document under `docs/`, in the shape of
-   `docs/register-map.md`. The testbench checks the RTL against it, so where the
-   two disagree the RTL is wrong.
+   `docs/register-map-sparse-cnn.md`. The testbench checks the RTL against it, so
+   where the two disagree the RTL is wrong.
 2. **A golden model** under `tb/model/`, imported by every seam that verifies
    the design and never copied into one.
 3. **A cocotb seam** at `tb/<dut>/`, driving only top-level ports.
 4. **An entry in `scripts/rtl_sources.sh`**, which is what lint, `make sec` and
    both synthesis flows read.
+5. **A register layer** under `driver/`, if it is to be driven from Linux. The
+   transport that moves its tiles is the contract's and comes with it; what
+   binds to its `compatible` string and reads its registers is not. See
+   [driver/README.md](../driver/README.md).
 
 ## Conforming accelerators
 
 | Module | Shape | Stream master | Register map |
 |--------|-------|---------------|--------------|
-| `sparse_cnn_axi` | Reduces a tile to an accumulator and a skip count | no | [register-map.md](register-map.md) |
+| `sparse_cnn_axi` | Reduces a tile to an accumulator and a skip count | no | [register-map-sparse-cnn.md](register-map-sparse-cnn.md) |
 | `relu_axi` | Transforms a tile beat by beat | yes | [register-map-relu.md](register-map-relu.md) |
 
 The two are deliberately the opposite shapes. One reports through registers and

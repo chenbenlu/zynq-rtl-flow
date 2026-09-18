@@ -100,8 +100,8 @@ structure, not for quality.
 
 The accelerator contract becomes a document
 ([docs/accelerator-contract.md](../accelerator-contract.md)) and
-`docs/register-map.md` becomes one conforming accelerator's map rather than
-*the* specification.
+`docs/register-map-sparse-cnn.md` becomes one conforming accelerator's map
+rather than *the* specification.
 
 A second accelerator stops being optional. One implementation cannot
 distinguish a contract from a description of itself, so `relu_axi` —

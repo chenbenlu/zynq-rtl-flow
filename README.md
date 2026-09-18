@@ -201,15 +201,19 @@ The build host cannot reach the board: it is on the server VLAN and the board is
 on the workstation one. The overlay is therefore built on the build host and
 copied through a machine that can see both.
 
+The overlay is named after the accelerator that was built, so two accelerators'
+overlays do not land on the same directory.
+
 ```bash
 # from a workstation that reaches both
-ssh rtxws 'cd zynq_cnn/build/zcu104/overlay && tar czf - zcu104-sparse-cnn' |
+A=zcu104-sparse-cnn     # or zcu104-relu
+ssh rtxws "cd zynq_cnn/build/zcu104/overlay && tar czf - $A" |
   ssh zcu104 'cat > /tmp/overlay.tgz'
 
-ssh zcu104 '
+ssh zcu104 "
   sudo tar xzf /tmp/overlay.tgz -C /lib/firmware/xilinx
-  D=/lib/firmware/xilinx/zcu104-sparse-cnn
-  sudo fpgautil -b $D/zcu104-sparse-cnn.bit.bin -o $D/zcu104-sparse-cnn.dtbo'
+  D=/lib/firmware/xilinx/$A
+  sudo fpgautil -b \$D/$A.bit.bin -o \$D/$A.dtbo"
 ```
 
 The accelerator then appears as a platform device and answers on the bus:
@@ -226,8 +230,9 @@ print(hex(struct.unpack("<I",m[0:4])[0]))'
 0x53500100
 ```
 
-`0x53500100` is the ID register [docs/register-map.md](docs/register-map.md)
-specifies — the first check that the thing on the bus is the design that was
+`0x53500100` is the ID register
+[docs/register-map-sparse-cnn.md](docs/register-map-sparse-cnn.md) specifies —
+the first check that the thing on the bus is the design that was
 built. To unload, `sudo rmdir /sys/kernel/config/device-tree/overlays/full`.
 
 ### Target boards
@@ -270,6 +275,8 @@ tb/         cocotb testbenches + pytest runners, one directory per seam
 flows/      synthesis flows — common/ (board map), embedded/, accel/
 scripts/    lint / format / regress / wave / sec + Vivado provisioning helpers
             rtl_sources.sh is the single source list every consumer reads
+driver/     the PS-side driver: a transport layer every conforming accelerator
+            shares, and one register layer per accelerator
 docker/     Dockerfile (simulation) + vivado.Dockerfile (synthesis)
 sim/        simulation artifacts, waveforms, coverage (gitignored)
 build/      synthesis + implementation artifacts (gitignored)
@@ -282,5 +289,6 @@ Start with [docs/accelerator-contract.md](docs/accelerator-contract.md) — it i
 what the flows are built around.
 [docs/architecture.md](docs/architecture.md) has the data flow and how to extend
 the single PE into a PE array;
-[docs/register-map.md](docs/register-map.md) is the example accelerator's own
-interface, the one its PS-side driver is written against.
+[docs/register-map-sparse-cnn.md](docs/register-map-sparse-cnn.md) is the
+example accelerator's own interface, the one its PS-side driver is written
+against.

@@ -7,10 +7,15 @@
 # the DMA's parameters have exactly one source. Hand-copying them here would put
 # a second, silently divergent copy of the address map in the repository.
 # =============================================================================
+import collections
 import re
 import sys
 
-src, dst, firmware = sys.argv[1], sys.argv[2], sys.argv[3]
+# stream_client_ip is the accelerator's module name, which is how the generated
+# tree identifies its node. It arrives as an argument rather than being written
+# here: which module is the accelerator belongs to the flow that built the
+# design, and an environment serving a contract has no one accelerator to name.
+src, dst, firmware, stream_client_ip = sys.argv[1:5]
 
 # Labels the booted kernel's own device tree exports under __symbols__. A
 # reference to anything else resolves against nothing and the overlay is
@@ -71,6 +76,18 @@ def property_value(text, name):
     return match.group(1) if match else None
 
 
+# What the two transformations below need to know about an AXI DMA channel: the
+# `interrupt-names` entry the owning IP node carries for it, the cell a `dmas`
+# entry selects it with, and the name a driver asks for it under. One table, so
+# that a third kind of channel cannot be taught to one site and not the other.
+DmaChannel = collections.namedtuple("DmaChannel", "interrupt cell name")
+
+DMA_CHANNELS = {
+    "xlnx,axi-dma-mm2s-channel": DmaChannel("mm2s_introut", 0, "tx"),
+    "xlnx,axi-dma-s2mm-channel": DmaChannel("s2mm_introut", 1, "rx"),
+}
+
+
 # An AXI DMA channel is a sub-node of the IP that owns it and shares that IP's
 # interrupt, but the generator numbers the two independently: with only mm2s
 # connected the IP node gets the line the block design actually drives and the
@@ -80,16 +97,6 @@ def property_value(text, name):
 # tree. The IP node's number is the trustworthy one because interrupt-names ties
 # it to the port on the block design, so each channel takes the entry named for
 # its direction rather than a number restated here.
-# The block design drives the accelerator's stream from the DMA; this is the RTL
-# top level's name, which is how the generated tree identifies the node.
-STREAM_CLIENT_IP = "sparse_cnn_axi"
-
-CHANNEL_INTERRUPT = {
-    "xlnx,axi-dma-mm2s-channel": "mm2s_introut",
-    "xlnx,axi-dma-s2mm-channel": "s2mm_introut",
-}
-
-
 def align_channel_interrupts(block):
     own, children = split_node(block)
     names = re.findall(r'"([^"]*)"', property_value(own, "interrupt-names") or "")
@@ -103,7 +110,7 @@ def align_channel_interrupts(block):
         if compatible is None:
             continue
         wanted = next(
-            (CHANNEL_INTERRUPT[c] for c in CHANNEL_INTERRUPT if '"%s"' % c in compatible),
+            (DMA_CHANNELS[c].interrupt for c in DMA_CHANNELS if '"%s"' % c in compatible),
             None,
         )
         if wanted is None:
@@ -129,6 +136,11 @@ def align_channel_interrupts(block):
 # block design's, not a number restated here: there is one AXI DMA and one
 # accelerator, and the stream runs between them. Anything else is a design this
 # rule no longer describes, so it stops the build rather than guessing.
+#
+# Which directions it gets is the block design's answer too. An accelerator that
+# reports through registers leaves the DMA's S2MM channel unconnected and the
+# generator then emits no sub-node for it, so the channels present in the tree
+# are exactly the ones the driver may ask for.
 def link_dma_client(nodes):
     def labelled(block):
         match = re.match(r"\s*([A-Za-z_][\w-]*)\s*:", block)
@@ -138,25 +150,44 @@ def link_dma_client(nodes):
     clients = [
         b
         for b in nodes
-        if (property_value(b, "xlnx,ip-name") or "") == '"%s"' % STREAM_CLIENT_IP
+        if (property_value(b, "xlnx,ip-name") or "") == '"%s"' % stream_client_ip
     ]
     if not dmas and not clients:
         return nodes
     if len(dmas) != 1 or len(clients) != 1:
         sys.exit(
             "expected one AXI DMA and one %s to connect the stream between; found"
-            " %d and %d" % (STREAM_CLIENT_IP, len(dmas), len(clients))
+            " %d and %d" % (stream_client_ip, len(dmas), len(clients))
         )
 
     label = labelled(dmas[0])
     if label is None:
         sys.exit("the AXI DMA node carries no label to reference it by")
 
+    _, children = split_node(dmas[0])
+    channels = sorted(
+        (
+            DMA_CHANNELS[compatible]
+            for child in children
+            for compatible in DMA_CHANNELS
+            if '"%s"' % compatible in (property_value(child, "compatible") or "")
+        ),
+        key=lambda channel: channel.cell,
+    )
+    if not channels:
+        sys.exit("the AXI DMA node carries no channel sub-node to connect")
+
     client = clients[0]
     indent = re.match(r"(\s*)", client.splitlines()[1]).group(1)
     linked = client.replace(
         "{",
-        "{\n%sdmas = <&%s 0>;\n%sdma-names = \"tx\";" % (indent, label, indent),
+        "{\n%sdmas = %s;\n%sdma-names = %s;"
+        % (
+            indent,
+            ", ".join("<&%s %d>" % (label, c.cell) for c in channels),
+            indent,
+            ", ".join('"%s"' % c.name for c in channels),
+        ),
         1,
     )
     return [linked if b is client else b for b in nodes]
