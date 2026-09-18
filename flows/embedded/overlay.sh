@@ -10,7 +10,12 @@ source "$(dirname "${BASH_SOURCE[0]}")/../common/env.sh"
 
 IMPL_DIR="${IMPL_DIR:-$BUILD_DIR/$BOARD/impl}"
 BOOT_DIR="${BOOT_DIR:-$BUILD_DIR/$BOARD/boot}"
-APP="${APP:-$BOARD-sparse-cnn}"
+# Named after the accelerator that was built, so two accelerators' overlays do
+# not land on the same directory. The `_axi` a top level carries to say it is
+# the wrapper is dropped: it leaves the first accelerator's name where it
+# already is on the board, and gives the second the name its device node has.
+accel="${RTL_TOP%_axi}"
+APP="${APP:-$BOARD-${accel//_/-}}"
 OVERLAY_DIR="${OVERLAY_DIR:-$BUILD_DIR/$BOARD/overlay/$APP}"
 
 BIT="$IMPL_DIR/$BOARD.bit"
@@ -46,7 +51,7 @@ fi
 mv "$IMPL_DIR/$BOARD.bit.bin" "$OVERLAY_DIR/$APP.bit.bin"
 
 python3 "$ROOT/flows/embedded/overlay.py" \
-        "$PL_DTSI" "$OVERLAY_DIR/$APP.dtso" "xilinx/$APP/$APP.bit.bin"
+        "$PL_DTSI" "$OVERLAY_DIR/$APP.dtso" "xilinx/$APP/$APP.bit.bin" "$RTL_TOP"
 
 # -@ keeps the __symbols__ node, without which the &amba and &fpga_full
 # references have nothing to resolve against when the overlay is applied.

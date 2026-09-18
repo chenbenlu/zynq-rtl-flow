@@ -57,8 +57,8 @@ be almost entirely idle and would add an interface for the integrator to wire
 up for no throughput benefit.
 
 The full offsets and semantics are in
-[docs/register-map.md](register-map.md), which is the specification the tests
-hold the RTL to. In outline: an ID register readable before anything is
+[docs/register-map-sparse-cnn.md](register-map-sparse-cnn.md), which is the
+specification the tests hold the RTL to. In outline: an ID register readable before anything is
 written, a control register whose single write starts a tile, a status register
 to poll, and latched accumulator and zero-skip registers holding the last
 *completed* tile — so a poll loop that reads one cycle early gets a defined

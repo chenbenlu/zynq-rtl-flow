@@ -9,7 +9,8 @@
 //   s_axi   AXI4-Lite slave  — control, status and results; one transaction per
 //           tile rather than per beat.
 //
-// Register map (byte offsets, 32-bit words) — see docs/register-map.md:
+// Register map (byte offsets, 32-bit words) — see
+// docs/register-map-sparse-cnn.md:
 //   0x00  ID      RO  {"SP", major, minor}
 //   0x04  CTRL    RW  [0] START (W1P) [1] CLEAR (W1P) [2] EN (level, reset 1)
 //   0x08  STATUS  RO  [0] BUSY [1] DONE

@@ -27,8 +27,8 @@ from sparse_mac_model import ACC_W, DATA_MASK, DATA_W, gen_pairs, golden, to_sig
 
 CLK_PERIOD_NS = 10
 
-# The register map documented in docs/register-map.md. These constants are the
-# specification the tests hold the RTL to, not a copy of it.
+# The register map documented in docs/register-map-sparse-cnn.md. These constants
+# are the specification the tests hold the RTL to, not a copy of it.
 REG_ID = 0x00
 REG_CTRL = 0x04
 REG_STATUS = 0x08
@@ -409,9 +409,9 @@ async def test_status_never_reports_the_previous_tile_after_start(dut):
     """STATUS stops describing the last tile the moment START is taken.
 
     AXI orders nothing between the write and the read channel, so the STATUS
-    read of the poll loop in docs/register-map.md can be sampled on the very
-    edge the CTRL write commits, and again while the pulse works its way to the
-    tile FSM. A STATUS that still reads BUSY=0, DONE=1 anywhere in there is
+    read of the poll loop in docs/register-map-sparse-cnn.md can be sampled on
+    the very edge the CTRL write commits, and again while the pulse works its
+    way to the tile FSM. A STATUS that still reads BUSY=0, DONE=1 anywhere in there is
     bit-for-bit a completed tile — the loop falls straight through it and reads
     ACC and SKIP a whole tile late.
     """
