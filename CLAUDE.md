@@ -139,6 +139,13 @@ Python **3.12** · Ubuntu **24.04**. Versions live in
 - Behaviour-preserving RTL change (retiming, operator rewrite): prove it with
   `make sec GOLDEN=HEAD` rather than trusting the directed tests.
   `SEC_ENGINE=miter` when the state encoding changed.
+- Behaviour-preserving block-design change (a width or a cell reference derived
+  from the environment rather than written into `bd/system.tcl`): `make sec`
+  reads RTL and cannot see it. Compare `Synth Design complete | Checksum:` in
+  `$OUT_DIR/vivado.log` — one line per run, the top-level design's — between two
+  runs on the same part. Equal checksums mean the same netlist; equal utilisation
+  and WNS only mean the two designs cost the same. Give the second run its own
+  `OUT_DIR=` or it overwrites the log you are comparing against.
 - cocotb 2.x API: `Clock(..., unit="ns")` (not `units`), runner imports from
   `cocotb_tools.runner`, `build(sources=[...])`. Read signed signals via the
   helpers in `tb_sparse_mac_pe.py` (cocotb value-accessor names vary).
@@ -226,6 +233,12 @@ Python **3.12** · Ubuntu **24.04**. Versions live in
   hangs long after the work is done — which looks exactly like the tool itself hanging.
   Redirect the tool's output to a file in the mounted workspace and read it from the host
   afterwards, rather than trying to diagnose a stall that is not one.
+- **Vivado echoes a `-source`d script into its log as it reads it**, each line commented
+  out, so waiting on that log for a marker matches the script's own text long before the
+  run reaches it: `grep 'Reports in'` says `make impl` finished while it is still
+  placing. Match the leading `>> ` that only the real `puts` carries. `Exiting Vivado` is
+  no better a marker — the block design's out-of-context runs are separate Vivado
+  processes whose logs land in the same file, so it appears three times per `make impl`.
 - **`write_hw_platform -include_bit` takes the bitstream from the implementation run**,
   not from a file. This repo writes the bitstream from the routed checkpoint
   (`bitstream.tcl`), so the run holds none and the export aborts with `Unable to get BIT
