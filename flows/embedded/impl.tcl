@@ -110,6 +110,19 @@ if {![string is double -strict $wns]} {
   set wns [get_property STATS.WNS [get_runs impl_1]]
 }
 
+# What the board's XDC adds is invisible in the slack it moved. An XDC is read
+# in a restricted Tcl mode where a rejected line costs a CRITICAL WARNING and
+# nothing else, so a margin that never lands leaves a run that succeeds and a
+# WNS better than the constraints claim — which is how both boards went
+# unconstrained until issue #22. USER_UNCERTAINTY is that file's own share, and
+# comes back empty rather than zero when nothing set it.
+set unc ""
+set user_unc ""
+if {[llength $paths]} {
+  set unc      [get_property UNCERTAINTY $paths]
+  set user_unc [get_property USER_UNCERTAINTY $paths]
+}
+
 set fh [open $out_dir/impl_summary.txt w]
 puts $fh "board         $board"
 puts $fh "part          $part"
@@ -137,6 +150,13 @@ if {[string is double -strict $wns]} {
   puts $fh "wns           unavailable — read timing_summary_impl.rpt"
   puts $fh "timing met    unknown"
 }
+if {[string is double -strict $unc]} {
+  if {[string is double -strict $user_unc]} {
+    puts $fh "uncertainty   $unc ns, $user_unc ns of it from xdc/$board/"
+  } else {
+    puts $fh "uncertainty   $unc ns, none of it from xdc/$board/"
+  }
+}
 puts $fh ""
 puts $fh "Whole-design utilization is in utilization_impl.rpt. The accelerator's own"
 puts $fh "share is the 'accel' row of utilization_hier.rpt — the block design's cell"
@@ -149,5 +169,11 @@ puts [read [open $out_dir/impl_summary.txt r]]
 if {$wns < 0} {
   puts ">> WARNING: timing NOT met at $pl_clk_mhz MHz (WNS $wns ns)"
   puts ">>   lower BOARD_PL_CLK_MHZ in flows/common/boards.sh, or fix the design"
+}
+if {[string is double -strict $unc] && ![string is double -strict $user_unc]} {
+  puts ">> WARNING: no clock uncertainty came from flows/embedded/xdc/$board/"
+  puts {>>   that directory exists to add it, so the WNS above is more optimistic}
+  puts {>>   than the constraints claim. The synth run's log says which line was}
+  puts {>>   rejected: [Designutils 20-1307] or [Vivado 12-4739].}
 }
 puts ">> Reports in $out_dir"
