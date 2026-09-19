@@ -245,6 +245,15 @@ Python **3.12** · Ubuntu **24.04**. Versions live in
   placing. Match the leading `>> ` that only the real `puts` carries. `Exiting Vivado` is
   no better a marker — the block design's out-of-context runs are separate Vivado
   processes whose logs land in the same file, so it appears three times per `make impl`.
+- **An XDC is read in a restricted Tcl mode that has no `if`.** A constraint guarded by
+  one is skipped along with the guard — `CRITICAL WARNING: [Designutils 20-1307] Command
+  'if' is not supported in the xdc constraint file` — and the only visible consequence is
+  a WNS *better* than the constraints claim, so nothing downstream fails. That is how
+  both boards' 0.100 ns of clock uncertainty went unapplied for every run before
+  issue #22. `-quiet` on the `get_*` is the guard an XDC can carry: an empty object list
+  is not an error, only `CRITICAL WARNING: [Vivado 12-4739] No valid object(s) found`,
+  and the run continues. A constraint that genuinely needs a condition belongs in
+  `impl.tcl`, which is ordinary Tcl.
 - **`write_hw_platform -include_bit` takes the bitstream from the implementation run**,
   not from a file. This repo writes the bitstream from the routed checkpoint
   (`bitstream.tcl`), so the run holds none and the export aborts with `Unable to get BIT

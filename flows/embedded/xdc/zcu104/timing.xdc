@@ -4,7 +4,8 @@
 # flows/common/boards.sh for where the two numbers come from. As on KV260 the
 # PL clock itself comes from the Zynq MPSoC IP, and this file only adds the
 # system margin.
-set pl_clk [get_clocks -quiet clk_pl_0]
-if {[llength $pl_clk]} {
-  set_clock_uncertainty -setup 0.100 $pl_clk
-}
+#
+# `-quiet` is the whole guard, for the reason spelled out in the KV260 file:
+# an `if` here is not read as Tcl, and a missing clock is a CRITICAL WARNING
+# rather than an error.
+set_clock_uncertainty -setup 0.100 [get_clocks -quiet clk_pl_0]
