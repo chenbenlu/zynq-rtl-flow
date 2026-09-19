@@ -88,6 +88,23 @@ DMA_CHANNELS = {
 }
 
 
+def interrupt_specs(own, names):
+    """The node's interrupt specifiers, one per entry in interrupt-names.
+
+    Not one per <...> group: the generator writes every cell of a
+    multi-interrupt property inside a single group, so a DMA with both channels
+    connected emits `interrupts = < 0 89 4 0 90 4 >` and splitting on the
+    brackets finds one interrupt where the node declares two. How wide a
+    specifier is belongs to the interrupt parent and is not in this file, so it
+    comes from there being exactly one per name.
+    """
+    cells = re.sub(r"[<>,]", " ", property_value(own, "interrupts") or "").split()
+    if not names or len(cells) % len(names):
+        return []
+    width = len(cells) // len(names)
+    return [" ".join(cells[i : i + width]) for i in range(0, len(cells), width)]
+
+
 # An AXI DMA channel is a sub-node of the IP that owns it and shares that IP's
 # interrupt, but the generator numbers the two independently: with only mm2s
 # connected the IP node gets the line the block design actually drives and the
@@ -100,8 +117,7 @@ DMA_CHANNELS = {
 def align_channel_interrupts(block):
     own, children = split_node(block)
     names = re.findall(r'"([^"]*)"', property_value(own, "interrupt-names") or "")
-    specs = re.findall(r"<([^>]*)>", property_value(own, "interrupts") or "")
-    by_name = dict(zip(names, specs))
+    by_name = dict(zip(names, interrupt_specs(own, names)))
     if not by_name:
         return block
 

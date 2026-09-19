@@ -101,9 +101,15 @@ is established by running it, which is a real asymmetry with the RTL — there a
 golden model and two simulated seams answer for correctness before anything is
 synthesised. ADR-0005 states it rather than leaving it to be discovered.
 
-Within that, `sparse_cnn.ko` has been run on the ZCU104 and `relu.ko` has not:
-there is no ReLU overlay on a board yet, so its `compatible` string is the name
-the device-tree generator is expected to derive from `relu_axi` rather than one
-that has been read out of a loaded tree. If the driver does not bind, read the
-node's `compatible` in `/sys/firmware/devicetree` and fix the match table — that
-is a one-line correction, not a design problem.
+Within that, all three modules have been run on the ZCU104 — 2026-09-19, on
+5.15.0-1015-xilinx-zynqmp, recorded on issue #25. `sparse_cnn.ko` moved five
+tiles through the transport with the results the pre-split module gave, and
+`relu.ko` bound to `xlnx,relu-axi-1.0` and returned five more on the DMA's S2MM
+channel, both interrupt lines moving. The generated tree does spell the
+`compatible` string the way this driver derives it.
+
+That is one accelerator's worth of evidence for the rule, not the rule. A third
+register layer's `compatible` is still a name derived from its module rather
+than one read off a tree: if it does not bind, read the node's `compatible` in
+`/sys/firmware/devicetree` and fix the match table — a one-line correction, not
+a design problem.

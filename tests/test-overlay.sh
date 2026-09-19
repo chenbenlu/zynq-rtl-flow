@@ -32,6 +32,11 @@ check() {
   fi
 }
 
+# How the IP node spells a property holding two interrupts. `flat` is what a
+# 2026.1 tree was measured to carry — every cell in one <...> group, not one
+# group per interrupt; `grouped` is the same property written the other way.
+SPEC_STYLE=flat
+
 # The generated tree, in the shape the device-tree generator emits it: one
 # amba_pl container, the accelerator, and the DMA with a sub-node per connected
 # channel. The channel interrupts are deliberately the numbers the generator
@@ -43,7 +48,11 @@ pl_dtsi() {
 
   if [[ "$channels" == s2mm ]]; then
     names='"mm2s_introut", "s2mm_introut"'
-    specs='<0 89 4>, <0 90 4>'
+    if [[ "$SPEC_STYLE" == grouped ]]; then
+      specs='<0 89 4>, <0 90 4>'
+    else
+      specs='< 0 89 4 0 90 4 >'
+    fi
   else
     names='"mm2s_introut"'
     specs='<0 89 4>'
@@ -153,6 +162,17 @@ check "the accelerator is given both channels" \
          && echo yes || echo no)"
 check "named the way the driver asks for them" \
       "$(grep -q 'dma-names = "tx", "rx";' "$WORK/out.dtso" && echo yes || echo no)"
+
+echo "-- the same two interrupts, one <...> group each"
+
+SPEC_STYLE=grouped
+run_overlay relu_axi xlnx,relu-axi-1.0 s2mm relu_axi
+rc=$?
+SPEC_STYLE=flat
+check "the flow completes" "$([[ $rc -eq 0 ]] && echo yes || echo no)"
+check "the s2mm channel still takes the second of them" \
+      "$([[ "$(channel_interrupt "$WORK/out.dtso" s2mm-channel)" == "0 90 4" ]] \
+         && echo yes || echo no)"
 
 echo "-- the accelerator is named by the flow, not by this script"
 

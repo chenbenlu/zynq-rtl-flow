@@ -288,6 +288,14 @@ Python **3.12** · Ubuntu **24.04**. Versions live in
   failure, with nothing in it pointing at the device tree. `overlay.py` gives each
   channel the IP node's entry named for its direction — `interrupt-names` is what ties
   those numbers to the ports on the block design.
+- **A node's `interrupts` is one `<...>` group however many interrupts it holds.**
+  The generator writes a two-interrupt DMA as `interrupts = < 0 89 4 0 90 4 >`, not as
+  two bracketed specifiers, so splitting on the brackets finds one interrupt where the
+  node declares two and the second channel is reported as having none. How wide a
+  specifier is belongs to the interrupt parent and is not in `pl.dtsi`; `overlay.py`
+  derives it from there being exactly one specifier per `interrupt-names` entry. A
+  synthetic tree that brackets them separately passes either way, which is how this
+  survived `tests/test-overlay.sh` until the first two-channel design was built.
 - **The generated tree describes no connection between two PL IPs.** Nothing in it says
   the DMA's stream feeds the accelerator, and without a `dmas` property on the client
   the kernel offers no way to ask for that channel. `overlay.py` adds it, derived from
