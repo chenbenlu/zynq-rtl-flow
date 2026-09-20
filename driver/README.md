@@ -71,10 +71,10 @@ needs the DMA the same overlay describes.
 ```bash
 # from a workstation that reaches the board
 tar czf - driver tb/model |
-  ssh zcu104 'rm -rf ~/zynq_cnn && mkdir -p ~/zynq_cnn && tar xzf - -C ~/zynq_cnn'
+  ssh zcu104 'rm -rf ~/zynq-rtl-flow && mkdir -p ~/zynq-rtl-flow && tar xzf - -C ~/zynq-rtl-flow'
 
 ssh zcu104 '
-  cd ~/zynq_cnn/driver
+  cd ~/zynq-rtl-flow/driver
   make
   sudo insmod accel_transport.ko
   sudo insmod sparse_cnn.ko          # or relu.ko, matching the loaded overlay

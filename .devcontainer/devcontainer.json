@@ -10,9 +10,9 @@
 // "" (an invalid mount). initializeCommand runs in a login shell, so it does see
 // the variable, and falls back to ~/.claude when it is unset.
 {
-  "name": "zynq_cnn sparse-CNN sim",
+  "name": "zynq-rtl-flow sim",
 
-  "image": "ghcr.io/chenbenlu/zynq_cnn-dev:latest",
+  "image": "ghcr.io/chenbenlu/zynq-rtl-flow-dev:latest",
   // "build": {
   //   "dockerfile": "../docker/Dockerfile",
   //   "context": "..",

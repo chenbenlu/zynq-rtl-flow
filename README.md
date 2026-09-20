@@ -1,4 +1,4 @@
-# zynq_cnn — an accelerator environment for Zynq UltraScale+
+# zynq-rtl-flow — an accelerator environment for Zynq UltraScale+
 
 An environment that carries a hand-written accelerator from SystemVerilog to a
 running design on an AMD Zynq UltraScale+ board: simulation, lint, coverage,
@@ -52,7 +52,7 @@ cannot reach.
 
 2. Open this folder in VS Code.
 3. Run **"Dev Containers: Reopen in Container"**. It pulls
-   `ghcr.io/chenbenlu/zynq_cnn-dev:latest` (first time only) -- no local
+   `ghcr.io/chenbenlu/zynq-rtl-flow-dev:latest` (first time only) -- no local
    compile. On Linux, VS Code auto-remaps the container user to your host UID,
    so files stay yours.
 4. In the integrated terminal:
@@ -83,21 +83,21 @@ Nothing podman-specific belongs in `devcontainer.json`.
 
 ```bash
 # Build the toolchain image
-docker build -f docker/Dockerfile -t zynq_cnn-dev:latest .
+docker build -f docker/Dockerfile -t zynq-rtl-flow-dev:latest .
 
 # Run a target. On Linux, pass --user so artifacts in the mounted workspace
 # are owned by you rather than the container user.
 docker run --rm -v "$PWD":/workspace -w /workspace \
   --user "$(id -u):$(id -g)" -e HOME=/tmp \
-  zynq_cnn-dev:latest make sim
+  zynq-rtl-flow-dev:latest make sim
 ```
 
 With rootless podman, drop `--user` and let `keep-id` do the mapping:
 
 ```bash
-podman build -f docker/Dockerfile -t zynq_cnn-dev:latest .
+podman build -f docker/Dockerfile -t zynq-rtl-flow-dev:latest .
 podman run --rm --userns=keep-id -v "$PWD":/workspace -w /workspace \
-  -e HOME=/tmp zynq_cnn-dev:latest make sim
+  -e HOME=/tmp zynq-rtl-flow-dev:latest make sim
 ```
 
 ## Waveforms
@@ -207,7 +207,7 @@ overlays do not land on the same directory.
 ```bash
 # from a workstation that reaches both
 A=zcu104-sparse-cnn     # or zcu104-relu
-ssh rtxws "cd zynq_cnn/build/zcu104/overlay && tar czf - $A" |
+ssh rtxws "cd zynq-rtl-flow/build/zcu104/overlay && tar czf - $A" |
   ssh zcu104 'cat > /tmp/overlay.tgz'
 
 ssh zcu104 "
@@ -257,7 +257,7 @@ on a private segment — [ADR-0003](docs/adr/0003-kv260-direct-attached-to-build
 Two GitHub Actions workflows:
 
 - **build-image.yml** — builds the toolchain image and pushes it to **GHCR**
-  (`ghcr.io/<owner>/zynq_cnn-dev`). Runs only when `docker/**` or
+  (`ghcr.io/<owner>/zynq-rtl-flow-dev`). Runs only when `docker/**` or
   `pyproject.toml` change, plus manual dispatch.
 - **ci.yml** — runs `lint → format-check → sim → coverage` inside that GHCR
   image on every push/PR and uploads waveforms + coverage as artifacts.

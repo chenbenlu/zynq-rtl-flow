@@ -68,7 +68,7 @@ coverage:
 	if command -v genhtml >/dev/null 2>&1 && [[ -n "$$infos" ]]; then \
 		echo ">> genhtml unified HTML report"; \
 		genhtml --quiet --output-directory $(COV_DIR)/html \
-			--title "zynq_cnn coverage" --legend $$infos; \
+			--title "zynq-rtl-flow coverage" --legend $$infos; \
 		echo ">> Open $(COV_DIR)/html/index.html"; \
 	elif ! command -v genhtml >/dev/null 2>&1; then \
 		echo ">> genhtml not found (install lcov) — skipping unified HTML report."; \
