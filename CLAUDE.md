@@ -1,4 +1,4 @@
-# CLAUDE.md — zynq_cnn
+# CLAUDE.md — zynq-rtl-flow
 
 An **environment** that carries a hand-written accelerator from SystemVerilog to
 a running design on a Xilinx Zynq UltraScale+ board — simulation (cocotb on
@@ -165,7 +165,7 @@ Python **3.12** · Ubuntu **24.04**. Versions live in
 - Verible tarball extracts `bin/` as `700`; Dockerfile `chmod -R a+rX` fixes it.
 - `ci.yml` requires the GHCR image to exist first — run `build-image.yml` once.
 - **Adding a Python dependency makes CI red for one push.** `ci.yml` pulls
-  `zynq_cnn-dev:latest` from GHCR; `build-image.yml` rebuilds it on the same
+  `zynq-rtl-flow-dev:latest` from GHCR; `build-image.yml` rebuilds it on the same
   push (`docker/**` + `pyproject.toml` are its triggers) but the two run
   concurrently, so the regression runs against the image *without* the new
   package. Let `build-image.yml` finish, then re-run `ci.yml`.
@@ -331,7 +331,7 @@ Python **3.12** · Ubuntu **24.04**. Versions live in
 
 ### Issue tracker
 
-Issues live in GitHub Issues on `chenbenlu/zynq_cnn` (via the `gh` CLI). See `docs/agents/issue-tracker.md`.
+Issues live in GitHub Issues on `chenbenlu/zynq-rtl-flow` (via the `gh` CLI). See `docs/agents/issue-tracker.md`.
 
 ### Domain docs
 
@@ -340,10 +340,11 @@ See `docs/agents/domain.md`. `CONTEXT.md` is in two halves — the environment's
 vocabulary, which is permanent, and the example design's, which goes when the
 example does.
 
-Six ADRs so far. Three cover the synthesis environment: persistent-disk install
-(0001), shared X socket (0002), direct-attached KV260 (0003). Two cover the
-board the design runs on: the ZCU104 becoming this project's board (0004) and
-the accelerator's driver being in scope while the boot image is not (0005). One
-covers what this repository is for: the environment is the deliverable and the
-accelerator is its first example (0006), which partially supersedes 0004 and
-corrects 0005's alternatives.
+Seven ADRs so far. Three cover the synthesis environment: persistent-disk
+install (0001), shared X socket (0002), direct-attached KV260 (0003). Two cover
+the board the design runs on: the ZCU104 becoming this project's board (0004)
+and the accelerator's driver being in scope while the boot image is not (0005).
+Two cover what this repository is for: the environment is the deliverable and
+the accelerator is its first example (0006), which partially supersedes 0004 and
+corrects 0005's alternatives, and the rename that follows from it (0007), which
+supersedes 0006's own decision to keep the old name.

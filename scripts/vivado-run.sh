@@ -15,7 +15,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-IMAGE="${IMAGE:-zynq_cnn-vivado:latest}"
+IMAGE="${IMAGE:-zynq-rtl-flow-vivado:latest}"
 XILINX_PREFIX="${XILINX_PREFIX:-/home/ubuntu/disk/lab/xilinx}"
 DOCKER="${DOCKER:-docker}"
 

@@ -1,7 +1,7 @@
 [project]
-name = "zynq-cnn-sim"
+name = "zynq-rtl-flow"
 version = "0.1.0"
-description = "Sparse CNN FPGA accelerator — Verilator + cocotb simulation skeleton"
+description = "An environment that carries a hand-written accelerator from RTL to a running design on a Zynq UltraScale+ board"
 requires-python = ">=3.10"
 dependencies = [
     "cocotb>=2.0,<3.0",

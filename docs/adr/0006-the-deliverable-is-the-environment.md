@@ -110,6 +110,9 @@ falsifier. It is verified in simulation; the rest of the flow it has to clear
 before this ADR's claim is more than a claim is the block design's S2MM channel
 and a return path in the driver.
 
+> Superseded by [ADR-0007](0007-rename-the-repository-to-zynq-rtl-flow.md):
+> the repository is renamed to `zynq-rtl-flow`.
+
 The repository keeps its name. `zynq_cnn`, the GHCR image and the Dev Container
 reference each other and the rename buys nothing a paragraph cannot. What does
 move is the vocabulary one layer down, so that a package named for the example

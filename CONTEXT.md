@@ -1,4 +1,4 @@
-# zynq_cnn
+# zynq-rtl-flow
 
 An environment that carries a hand-written accelerator from RTL to a running
 design on an AMD Zynq UltraScale+ MPSoC, and one accelerator that goes through
