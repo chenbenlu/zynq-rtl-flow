@@ -28,14 +28,11 @@ cannot reach.
 
 ## Toolchain (pinned)
 
-| Tool | Version |
-|------|---------|
-| Verilator | 5.042 |
-| cocotb | 2.x (2.0.1) |
-| Verible | v0.0-4063-gf831ec18 |
-| Python | 3.12 |
-| Base image | Ubuntu 24.04 |
-| Vivado / Vitis | 2026.1 (build host only) |
+Verilator, cocotb, Verible, Python and the base image are pinned in
+[docker/Dockerfile](docker/Dockerfile), with the Python packages mirrored in
+[pyproject.toml](pyproject.toml). Vivado / Vitis **2026.1** runs on the build
+host only. The versions, and why each one is what it is, are listed once in
+[CLAUDE.md](CLAUDE.md#pinned-tooling-keep-in-sync).
 
 ## Prerequisites
 
@@ -160,36 +157,19 @@ is in [ADR-0001](docs/adr/0001-vivado-installed-on-persistent-disk.md).
 ```bash
 make vivado-shell            # a shell inside the Vivado container
 make synth                   # OOC baseline for sparse_cnn_axi on kv260
-make synth RTL_TOP=sparse_mac_pe   # ... or for the bare PE
-make synth BOARD=zcu104 CLK_PERIOD=2.5
+make synth RTL_TOP=sparse_mac_pe BOARD=zcu104 CLK_PERIOD=2.5
 make impl BOARD=kv260        # place & route the system design
 make bitstream BOARD=kv260   # .bit + .bin from the routed checkpoint
 make xsa BOARD=zcu104        # hardware handoff for the PS-side boot flow
-make hls KERNEL=sparse_conv
+make overlay BOARD=zcu104    # bitstream + device tree, ready to load
 make vivado-gui              # GUI on the build host's display
 ```
 
-`make synth` synthesises one module out-of-context — no surrounding design, no
-I/O buffers — and reports what that module costs and how fast it runs. It is a
-measurement, not a step towards a bitstream.
-
-`make impl` builds the real thing: the block design in
-[flows/embedded/bd/system.tcl](flows/embedded/bd/system.tcl) — Zynq PS, AXI
-interconnect, a DMA feeding the accelerator's stream — placed and routed against
-the per-board PL clock target in [flows/common/boards.sh](flows/common/boards.sh),
-with a summary in `build/<board>/impl/impl_summary.txt`. `make bitstream` writes
-the `.bit` from the routed checkpoint.
-
-`make xsa` exports the hardware handoff — the `.xsa` carrying the PS
-configuration, the address map and the block design's metadata. It is what FSBL,
-the PMU firmware and the device tree are generated from, so it is the first
-artefact the PS-side boot flow needs; the bitstream is a separate file beside it
-rather than packaged inside (see the gotcha in CLAUDE.md).
-
-`make overlay` packages the bitstream and the generated PL device tree into a
-firmware overlay — what a running Linux loads through the ZynqMP FPGA manager.
-The device-tree nodes are not written by hand; they come from the same hardware
-handoff as everything else, so the accelerator's address has one source.
+What each stage produces and what it hands to the next is
+[docs/environment.md](docs/environment.md); the full target list is in
+[CLAUDE.md](CLAUDE.md). The distinction worth having before you run either:
+`make synth` measures one module in isolation and is not a step towards a
+bitstream, while `make impl` builds the design that ends up on the board.
 
 The acceleration-flow targets (`make hls`, `make xclbin`) still depend on work
 that has not been done yet — an HLS kernel and a platform — and each says
@@ -248,9 +228,14 @@ has since released the board ([ADR-0004](docs/adr/0004-zcu104-is-this-projects-b
 Nothing in this repository builds that image, and nothing needs to: the
 programmable logic is loaded into the running system rather than at boot.
 
-Both devices are covered by the free Vivado ML Standard Edition; no licence
-purchase is needed. The KV260 is cabled directly to the build host's second NIC
-on a private segment — [ADR-0003](docs/adr/0003-kv260-direct-attached-to-build-host.md).
+Both devices are covered by the free tier, but from 2026.1 the free tier is a
+licence rather than the absence of one: Vivado refuses to launch without a
+licence file at all, and the one this build host holds is node-locked and
+expires. The measurement and the failure mode are in
+[CLAUDE.md](CLAUDE.md#gotchas-learned-during-setup).
+
+The KV260 is cabled directly to the build host's second NIC on a private
+segment — [ADR-0003](docs/adr/0003-kv260-direct-attached-to-build-host.md).
 
 ## Continuous Integration
 
@@ -280,15 +265,14 @@ driver/     the PS-side driver: a transport layer every conforming accelerator
 docker/     Dockerfile (simulation) + vivado.Dockerfile (synthesis)
 sim/        simulation artifacts, waveforms, coverage (gitignored)
 build/      synthesis + implementation artifacts (gitignored)
-docs/       the accelerator contract, architecture notes, a register map per
-            accelerator, ADRs
+docs/       the accelerator contract, how the environment works, the example
+            accelerators, a register map per accelerator, ADRs
 CONTEXT.md  project glossary, in two halves: the environment and the example
 ```
 
 Start with [docs/accelerator-contract.md](docs/accelerator-contract.md) — it is
 what the flows are built around.
-[docs/architecture.md](docs/architecture.md) has the data flow and how to extend
-the single PE into a PE array;
-[docs/register-map-sparse-cnn.md](docs/register-map-sparse-cnn.md) is the
-example accelerator's own interface, the one its PS-side driver is written
-against.
+[docs/environment.md](docs/environment.md) is the path a conforming accelerator
+takes through them and what each stage hands to the next;
+[docs/example-accelerators.md](docs/example-accelerators.md) is the two designs
+that take it today, and goes when they do.
