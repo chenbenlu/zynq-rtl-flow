@@ -162,6 +162,8 @@ Python **3.12** · Ubuntu **24.04**. Versions live in
 
 ## Gotchas (learned during setup)
 
+### The toolchain image and CI
+
 - Verilator build needs `libfl-dev`/`libfl2` (FlexLexer.h).
 - Runtime needs `ccache` (Verilator bakes `ccache g++` into its makefiles) and
   `python3-dev` (cocotb embeds `libpython3.12.so`).
@@ -172,6 +174,12 @@ Python **3.12** · Ubuntu **24.04**. Versions live in
   push (`docker/**` + `pyproject.toml` are its triggers) but the two run
   concurrently, so the regression runs against the image *without* the new
   package. Let `build-image.yml` finish, then re-run `ci.yml`.
+- oss-cad-suite is intentionally **off** `PATH` (`OSS_CAD_SUITE` env only): its
+  `bin/` ships its own `verilator`/`cocotb-config` that would shadow the pinned
+  Verilator v5.042. `scripts/sec.sh` puts it on `PATH` for itself.
+
+### The AMD toolchain, and what 2026.1 moved
+
 - **Vivado links against `libtinfo.so.5`**, which Ubuntu dropped after 20.04. The
   Vivado image symlinks it to `libtinfo.so.6`; without it the tools abort at startup
   with a shared-library error that looks nothing like a missing-package problem.
@@ -186,21 +194,6 @@ Python **3.12** · Ubuntu **24.04**. Versions live in
   They are also the nearest worked example of packaging a bitstream as a firmware
   overlay, so when that step gets written, read them out of the git history before
   PR #290 rather than from a checkout.
-- **bash cannot export an array.** `export RTL_SOURCES="${RTL_SOURCES[*]}"` on the
-  array of the same name assigns to element 0 and exports nothing, so Vivado saw an
-  unset variable. The flow scripts flatten into a differently-named scalar
-  (`RTL_SOURCE_LIST`) of **absolute** paths — Vivado runs from the output directory,
-  so relative paths resolve against the wrong place.
-- **IP Integrator cannot evaluate a parameter default that references a package.**
-  A module added to a block design is packaged first, and each parameter's default is
-  evaluated with no visibility of the package, so `parameter int unsigned DATA_W =
-  sparse_cnn_pkg::DATA_W` fails at `create_bd_cell` with `Undefined parameter
-  "sparse_cnn_pkg"` — before synthesis runs. Widths that nothing overrides belong in a
-  `localparam` sourced from the package; port widths may reference the package freely,
-  because a width that does not depend on a user parameter is constant-folded. The
-  corollary: **out-of-context synthesis succeeding tells you nothing about whether a
-  module can be instantiated in a block design** — the two use different front ends,
-  and lint, cocotb and `make sec` all resolve the package correctly too.
 - **From 2026.1, Vivado will not launch without a license file — including the free
   tier.** The old "Vivado ML Standard is free and needs no license" rule ended with
   2025.x; 2026.1 uses tiers (Basic free w/ annual renewal, then Core/Pro/Enterprise/Gold)
@@ -248,6 +241,24 @@ Python **3.12** · Ubuntu **24.04**. Versions live in
   placing. Match the leading `>> ` that only the real `puts` carries. `Exiting Vivado` is
   no better a marker — the block design's out-of-context runs are separate Vivado
   processes whose logs land in the same file, so it appears three times per `make impl`.
+
+### The flows: block design, constraints, handoff
+
+- **bash cannot export an array.** `export RTL_SOURCES="${RTL_SOURCES[*]}"` on the
+  array of the same name assigns to element 0 and exports nothing, so Vivado saw an
+  unset variable. The flow scripts flatten into a differently-named scalar
+  (`RTL_SOURCE_LIST`) of **absolute** paths — Vivado runs from the output directory,
+  so relative paths resolve against the wrong place.
+- **IP Integrator cannot evaluate a parameter default that references a package.**
+  A module added to a block design is packaged first, and each parameter's default is
+  evaluated with no visibility of the package, so `parameter int unsigned DATA_W =
+  sparse_cnn_pkg::DATA_W` fails at `create_bd_cell` with `Undefined parameter
+  "sparse_cnn_pkg"` — before synthesis runs. Widths that nothing overrides belong in a
+  `localparam` sourced from the package; port widths may reference the package freely,
+  because a width that does not depend on a user parameter is constant-folded. The
+  corollary: **out-of-context synthesis succeeding tells you nothing about whether a
+  module can be instantiated in a block design** — the two use different front ends,
+  and lint, cocotb and `make sec` all resolve the package correctly too.
 - **An XDC is read in a restricted Tcl mode that has no `if`.** A constraint guarded by
   one is skipped along with the guard — `CRITICAL WARNING: [Designutils 20-1307] Command
   'if' is not supported in the xdc constraint file` — and the only visible consequence is
@@ -264,6 +275,14 @@ Python **3.12** · Ubuntu **24.04**. Versions live in
   `.bit` sits beside the `.xsa` and bootgen is handed both. Adding `-include_bit` means
   first making `impl` run all the way through bitstream generation, which is a different
   flow, not a missing switch.
+- **`PSU__NUM_F2P0__INTR__INPUTS` is read-only.** IP Integrator derives `pl_ps_irq0`'s
+  width from what is connected to the port, so setting it costs a `CRITICAL WARNING:
+  [BD 41-737] ... It is read-only` — which also keeps the synthesis run out of the
+  cache. Enable `PSU__USE__IRQ0`, connect the source, and let the width follow. One
+  source connects directly; a second needs an `xlconcat`.
+
+### The device tree, the overlay and the board
+
 - **An overlay that adds a bus node gets one device, and none for its children.**
   The generated `pl.dtsi` wraps everything in an `amba_pl` container with
   `compatible = "simple-bus"`. Applied as written, the kernel creates a platform
@@ -281,11 +300,6 @@ Python **3.12** · Ubuntu **24.04**. Versions live in
   a private segment (ADR-0003) — the router has no free port, and the workstation VLAN
   blocks the server→workstation direction this flow needs. `192.168.100.x` on `RTXWS`
   is that link, not a stray config.
-- **`PSU__NUM_F2P0__INTR__INPUTS` is read-only.** IP Integrator derives `pl_ps_irq0`'s
-  width from what is connected to the port, so setting it costs a `CRITICAL WARNING:
-  [BD 41-737] ... It is read-only` — which also keeps the synthesis run out of the
-  cache. Enable `PSU__USE__IRQ0`, connect the source, and let the width follow. One
-  source connects directly; a second needs an `xlconcat`.
 - **`pl.dtsi` parents its interrupts on `&imux`, which a booted kernel does not have.**
   `imux` is a proxy interrupt controller the *system* device tree defines so one tree
   can serve the A53, R5 and PMU domains, mapping every interrupt 1:1 onto that domain's
@@ -324,9 +338,6 @@ Python **3.12** · Ubuntu **24.04**. Versions live in
 - **The board's kernel is built with `CONFIG_STRICT_DEVMEM=y`**, so a tile cannot be
   submitted from userspace at all and `driver/` is a kernel module for that reason
   ([driver/README.md](driver/README.md) has the full account, ADR-0005 the decision).
-- oss-cad-suite is intentionally **off** `PATH` (`OSS_CAD_SUITE` env only): its
-  `bin/` ships its own `verilator`/`cocotb-config` that would shadow the pinned
-  Verilator v5.042. `scripts/sec.sh` puts it on `PATH` for itself.
 
 ## Agent skills
 
