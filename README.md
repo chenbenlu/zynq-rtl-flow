@@ -280,15 +280,14 @@ driver/     the PS-side driver: a transport layer every conforming accelerator
 docker/     Dockerfile (simulation) + vivado.Dockerfile (synthesis)
 sim/        simulation artifacts, waveforms, coverage (gitignored)
 build/      synthesis + implementation artifacts (gitignored)
-docs/       the accelerator contract, architecture notes, a register map per
-            accelerator, ADRs
+docs/       the accelerator contract, how the environment works, the example
+            accelerators, a register map per accelerator, ADRs
 CONTEXT.md  project glossary, in two halves: the environment and the example
 ```
 
 Start with [docs/accelerator-contract.md](docs/accelerator-contract.md) — it is
 what the flows are built around.
-[docs/architecture.md](docs/architecture.md) has the data flow and how to extend
-the single PE into a PE array;
-[docs/register-map-sparse-cnn.md](docs/register-map-sparse-cnn.md) is the
-example accelerator's own interface, the one its PS-side driver is written
-against.
+[docs/environment.md](docs/environment.md) is the path a conforming accelerator
+takes through them and what each stage hands to the next;
+[docs/example-accelerators.md](docs/example-accelerators.md) is the two designs
+that take it today, and goes when they do.

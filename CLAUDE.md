@@ -8,7 +8,7 @@ accelerator is the example that goes through it, not the point of it
 ([ADR-0006](docs/adr/0006-the-deliverable-is-the-environment.md)). What a module
 must present to be carried is
 [docs/accelerator-contract.md](docs/accelerator-contract.md). See
-[README.md](README.md) and [docs/architecture.md](docs/architecture.md).
+[README.md](README.md) and [docs/environment.md](docs/environment.md).
 
 ## How to run things
 
@@ -101,6 +101,9 @@ missing kernel, not the script.
   `xdc/<board>/`), `accel/`.
 - `docs/accelerator-contract.md` — what a module must present to get the flows.
   The environment's specification; every conforming accelerator answers to it.
+- `docs/environment.md` — the path a conforming accelerator takes and what each
+  stage hands to the next. `docs/example-accelerators.md` — the two designs that
+  take it today; it goes when they do, the way `CONTEXT.md`'s second half does.
 - `docs/register-map-sparse-cnn.md`, `docs/register-map-relu.md` — one AXI4-Lite
   map per accelerator. Each is the specification for *that* accelerator, not a
   description: its tests check the RTL against it.
