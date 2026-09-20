@@ -125,7 +125,7 @@ Vivado / Vitis **2026.1** (build host only). Chosen because `Xilinx/kria-vitis-p
 — the KV260 platform's upstream — tracks it on `main`; that repo stopped cutting release
 branches after 2023.2, so any older tools version means pinning an arbitrary commit.
 Boards: **KV260** (ZU5EV, primary) and **ZCU104** (ZU7EV) — both covered by the free
-Vivado ML Standard Edition.
+**Basic** tier, which from 2026.1 still requires a licence file; see the gotcha below.
 
 Verilator **v5.042** · cocotb **2.x** · cocotbext-axi **0.1.25+** · Verible **v0.0-4063-gf831ec18** ·
 oss-cad-suite **2026-08-01** (Yosys/eqy/sby, for `make sec`) ·
@@ -321,11 +321,9 @@ Python **3.12** · Ubuntu **24.04**. Versions live in
   the buffer, and the driver cannot learn the result's length from the transfer. What
   catches a short tile is the accelerator's own beat count (`relu_axi`'s `COUNT`),
   which is why the contract's optional stream master is paired with one.
-- **The board's kernel is built with `CONFIG_STRICT_DEVMEM=y`.** `/dev/mem` maps the
-  accelerator's AXI4-Lite registers, which are device memory, but not the system memory
-  a DMA descriptor points at — so reading `ACC`/`SKIP` from userspace works and
-  submitting a tile cannot. That is why `driver/` exists (ADR-0005), and why it is built
-  on the board: the toolchain image has no kernel headers and the Vivado image is x86.
+- **The board's kernel is built with `CONFIG_STRICT_DEVMEM=y`**, so a tile cannot be
+  submitted from userspace at all and `driver/` is a kernel module for that reason
+  ([driver/README.md](driver/README.md) has the full account, ADR-0005 the decision).
 - oss-cad-suite is intentionally **off** `PATH` (`OSS_CAD_SUITE` env only): its
   `bin/` ships its own `verilator`/`cocotb-config` that would shadow the pinned
   Verilator v5.042. `scripts/sec.sh` puts it on `PATH` for itself.
