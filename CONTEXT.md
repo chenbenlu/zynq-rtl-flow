@@ -2,13 +2,12 @@
 
 An environment that carries a hand-written accelerator from RTL to a running
 design on an AMD Zynq UltraScale+ MPSoC, and one accelerator that goes through
-it. This file is the project's glossary: it fixes the vocabulary the RTL, the
-testbenches and the synthesis flows all speak. It holds no implementation
-details — those live in the code, in `docs/adr/` and in the module READMEs.
+it. This is the project's glossary: the vocabulary the RTL, the testbenches
+and the synthesis flows share. Implementation details live in the code,
+`docs/adr/` and the module READMEs.
 
-The two halves below have different lifetimes. The environment's language is
-permanent; the example design's language is replaced whenever the example is —
-see [ADR-0006](docs/adr/0006-the-deliverable-is-the-environment.md).
+The environment's half is permanent; the example design's half is replaced
+with the example ([ADR-0006](docs/adr/0006-the-deliverable-is-the-environment.md)).
 
 ## The environment
 
@@ -16,7 +15,7 @@ see [ADR-0006](docs/adr/0006-the-deliverable-is-the-environment.md).
 
 **Accelerator contract**:
 What a module must present at its boundary for this repository's flows to carry
-it all the way to the board, specified in
+it to the board, specified in
 [docs/accelerator-contract.md](docs/accelerator-contract.md). Held by port
 names, widths and that document — never by the type system.
 _Avoid_: interface spec, wrapper API, socket
@@ -70,9 +69,8 @@ _Avoid_: control path, register interface
 
 ### The flows
 
-Two distinct paths take RTL to silicon. They differ in their tooling, their
-artefacts and what counts as success, so they are never referred to
-interchangeably.
+Two distinct paths take RTL to silicon, with different tooling, artefacts and
+notions of success. Never use one's name for the other.
 
 **Embedded flow**:
 Hand-written SystemVerilog synthesised by Vivado into a bitstream, driven from
@@ -123,8 +121,8 @@ _Avoid_: server, rtx, workstation
 
 ## The example design
 
-The language of the accelerator that currently occupies the environment. These
-terms go when it does; nothing in the environment depends on them.
+The language of the accelerator currently in the environment. These terms go
+when it does; nothing in the environment depends on them.
 
 **Processing Element (PE)**:
 One multiply-accumulate unit that skips zero-valued operands. The smallest unit
