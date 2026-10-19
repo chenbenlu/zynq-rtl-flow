@@ -1,19 +1,18 @@
 # Register map — `sparse_cnn_axi`
 
-The AXI4-Lite slave of one accelerator
-([rtl/sparse_cnn_axi.sv](../rtl/sparse_cnn_axi.sv)), the first implementation of
-[the accelerator contract](accelerator-contract.md). The contract fixes the
-probe — a 32-bit ID register at offset `0x00` — and nothing else; everything
-below is this design's own and changes with it.
+The AXI4-Lite slave of [rtl/sparse_cnn_axi.sv](../rtl/sparse_cnn_axi.sv), the
+first implementation of [the accelerator contract](accelerator-contract.md).
+The contract fixes only the probe — a 32-bit ID register at `0x00`; everything
+else here is this design's own and changes with it.
 
-Within that scope this file is the specification a PS-side driver is written
-against: the testbench in [tb/sparse_cnn_axi/](../tb/sparse_cnn_axi/) checks the
-RTL against what is written here, so where the two disagree the RTL is wrong.
+This file is the specification a PS-side driver is written against. The
+testbench in [tb/sparse_cnn_axi/](../tb/sparse_cnn_axi/) checks the RTL against
+it, so where the two disagree the RTL is wrong.
 
-All registers are 32 bits and aligned to 4 bytes. Offsets are from the base
-address the block design assigns to the accelerator (recorded in
-`build/<board>/impl/address_map.txt` when `make impl` runs). Unmapped offsets
-read as zero and ignore writes; every access returns `OKAY`.
+All registers are 32 bits, 4-byte aligned. Offsets are from the base address the
+block design assigns (recorded in `build/<board>/impl/address_map.txt` by
+`make impl`). Unmapped offsets read as zero and ignore writes; every access
+returns `OKAY`.
 
 | Offset | Name | Access | Meaning |
 |--------|--------|--------|---------|
@@ -25,8 +24,8 @@ read as zero and ignore writes; every access returns `OKAY`.
 
 ## `0x00` ID — identification
 
-Reads `0x53500100` and is readable before anything has been written, so
-software can confirm what it is talking to before it touches a control bit.
+Reads `0x53500100`, readable before anything has been written, so software
+can confirm what it is talking to before touching a control bit.
 
 | Bits | Value | Meaning |
 |------|-------|---------|
@@ -34,11 +33,9 @@ software can confirm what it is talking to before it touches a control bit.
 | 15:8 | `0x01` | Major version |
 | 7:0 | `0x00` | Minor version |
 
-Bump the major version when a change would break a driver written against this
-map; bump the minor version for additions that do not.
-
-`0x5350` identifies *this* accelerator. Another conforming accelerator carries
-its own tag at the same offset — that is how a driver tells them apart.
+Versioning follows [the contract](accelerator-contract.md#axi4-lite-slave--s_axi).
+`0x5350` identifies *this* accelerator; another conforming accelerator carries
+its own tag at the same offset, which is how a driver tells them apart.
 
 ## `0x04` CTRL — control
 
@@ -53,8 +50,8 @@ its own tag at the same offset — that is how a driver tells them apart.
 back as 0, so CTRL can be read-modify-written without re-triggering them.
 
 **Starting a tile is one write:** `CTRL = EN | START` (`0x5`). EN is a level,
-not a pulse, so a write that leaves its bit clear disables the accelerator —
-write `0x5` rather than `0x1`.
+so a write that leaves its bit clear disables the accelerator — write `0x5`,
+not `0x1`.
 
 START is ignored while STATUS.BUSY is set.
 
@@ -74,21 +71,20 @@ tile that never receives its `tlast`; reset the block instead.
 BUSY falls and DONE rises in the same cycle, so a poll loop can wait on DONE
 alone.
 
-Both bits turn over with the START write itself, not a few cycles behind it. AXI
-orders nothing between the write and read channels, so a STATUS read can reach
-the accelerator in the very cycle the CTRL write commits; that tie goes to the
-write, and the read already sees `BUSY=1, DONE=0`, as does every read after it.
-The poll loop below therefore needs no fence between the write and the reads
-that follow it: it can never be answered with the previous tile's `BUSY=0,
-DONE=1` and mistake it for this tile finishing.
+Both bits turn over with the START write itself, not cycles later. AXI orders
+nothing between the write and read channels, so a STATUS read can reach the
+accelerator in the very cycle the CTRL write commits. That tie goes to the
+write: the read already sees `BUSY=1, DONE=0`, as does every later read. So the
+poll loop below needs no fence after the write — it can never see the previous
+tile's `BUSY=0, DONE=1` and mistake it for this tile finishing.
 
 ## `0x0C` ACC — accumulator
 
 The signed accumulator of the **last completed tile**, sign-extended to 32 bits.
 It is latched when the tile's `tlast` beat is absorbed and holds until the next
 tile completes, so a read issued one cycle too early returns the previous
-tile's result rather than a partial accumulation. Reset and CTRL.CLEAR both zero it,
-and CTRL.CLEAR does so whether or not a tile is in flight.
+tile's result rather than a partial accumulation. Reset and CTRL.CLEAR both
+zero it, CTRL.CLEAR whether or not a tile is in flight.
 
 ## `0x10` SKIP — zero-skip count
 
@@ -96,9 +92,8 @@ The number of operand pairs in the last completed tile that had a zero operand
 and were therefore skipped. Latched, held, and cleared on the same terms as
 ACC. Counts up to `SKIP_W` bits (16 by default) and is zero-extended to 32.
 
-This is what makes the sparse behaviour observable from software rather than
-only from a waveform: for a tile of *n* pairs, *n* − SKIP multiply-accumulates
-actually happened.
+It makes the sparse behaviour observable from software, not only from a
+waveform: for a tile of *n* pairs, *n* − SKIP multiply-accumulates happened.
 
 ## The stream
 
@@ -110,13 +105,12 @@ Operand pairs arrive on the AXI4-Stream slave, one pair per beat, `2*DATA_W`
 | 15:8 | Activation, signed 8-bit |
 | 7:0 | Weight, signed 8-bit |
 
-`tlast` marks the final beat of a tile. The tile boundary travels with the data
-rather than being signalled by a register write, so software never has to
-synchronise a control-path event against a DMA it does not directly observe.
+`tlast` marks the final beat of a tile, as
+[the contract](accelerator-contract.md#axi4-stream-slave--s_axis) requires.
 
 `tready` is asserted only when the beat will actually be consumed — never
 during idle, never while EN is low, never during the cycle a CLEAR is applied —
-and a beat that has been accepted is never dropped.
+and an accepted beat is never dropped.
 
 ## Driving a tile
 
@@ -131,5 +125,5 @@ int32_t  acc  = (int32_t) readl(base + ACC);
 uint32_t skip =           readl(base + SKIP);
 ```
 
-The first version is polled deliberately. An interrupt line is a reasonable
-later addition and is not needed to prove the interface.
+Polled deliberately. An interrupt line is a possible later addition, not
+needed to prove the interface.

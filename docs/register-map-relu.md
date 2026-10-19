@@ -5,19 +5,18 @@ The AXI4-Lite slave of the Leaky ReLU accelerator
 [the accelerator contract](accelerator-contract.md).
 
 Only offset `0x00` is the contract's. **The rest is not `sparse_cnn_axi`'s map
-with different names** — it is a different map, because this is a different
-kind of accelerator. There is no START, because a tile begins when its first
-beat arrives; there is no result register, because the results leave on the
-stream master. Software that assumes one accelerator's layout from another's is
-what the ID register exists to stop.
+renamed** — it is a different map for a different kind of accelerator. There is
+no START: a tile begins when its first beat arrives. There is no result
+register: results leave on the stream master. The ID register exists to stop
+software assuming one accelerator's layout from another's.
 
-Within that scope this file is the specification a PS-side driver is written
-against: the testbench in [tb/relu_axi/](../tb/relu_axi/) checks the RTL against
-what is written here, so where the two disagree the RTL is wrong.
+This file is the specification a PS-side driver is written against. The
+testbench in [tb/relu_axi/](../tb/relu_axi/) checks the RTL against it, so where
+the two disagree the RTL is wrong.
 
-All registers are 32 bits and aligned to 4 bytes. Offsets are from the base
-address the block design assigns to the accelerator. Unmapped offsets read as
-zero and ignore writes; every access returns `OKAY`.
+All registers are 32 bits, 4-byte aligned. Offsets are from the base address the
+block design assigns. Unmapped offsets read as zero and ignore writes; every
+access returns `OKAY`.
 
 | Offset | Name | Access | Meaning |
 |--------|--------|--------|---------|
@@ -44,10 +43,9 @@ Reads `0x524C0100`.
 | 0 | EN | RW | 1 | Enable. While low the accelerator withdraws stream ready and holds its state |
 | 31:1 | — | RO | 0 | Reserved: reads 0, writes ignored |
 
-EN is a level and the only bit in the register. Note that it is **bit 0 here and
-bit 2 in `sparse_cnn_axi`**: the contract fixes the probe, not the control
-layout, and a driver that assumed otherwise would disable an accelerator it
-meant to start.
+EN is a level and the only bit. It is **bit 0 here and bit 2 in
+`sparse_cnn_axi`**: the contract fixes the probe, not the control layout, and a
+driver that assumed otherwise would disable an accelerator it meant to start.
 
 ## `0x08` STATUS — status
 
@@ -57,8 +55,8 @@ meant to start.
 | 1 | DONE | The last tile completed. Cleared when the next tile's first beat is accepted |
 | 31:2 | — | Reads 0 |
 
-BUSY spans the pipeline rather than only the input side. It falls when the final
-beat *leaves*, not when it is accepted, so COUNT is never read a beat early.
+BUSY spans the pipeline, not only the input side: it falls when the final beat
+*leaves*, not when it is accepted, so COUNT is never read a beat early.
 
 ## `0x0C` SLOPE — negative slope
 
@@ -69,18 +67,18 @@ a plain ReLU; `0xFF` is very nearly the identity.
 
 Bits above 7 are not storage and read back as zero.
 
-Written between tiles. A write that lands mid-tile takes effect on the next beat
-accepted — the accelerator does not defer it, because an accelerator that
-silently ignored a write would be harder to explain than one that applies it.
+Write it between tiles. A mid-tile write takes effect on the next beat
+accepted. It is not deferred, because an accelerator that silently ignored a
+write would be harder to explain than one that applies it.
 
 ## `0x10` COUNT — beats in the last completed tile
 
 Latched when the tile's final beat leaves, and held until the next tile
 completes. Counts up to 16 bits and is zero-extended to 32.
 
-It is the observable that makes the tile boundary checkable from software: a
-driver that submitted *n* activations and reads anything but *n* has lost beats
-somewhere between the DMA and the stream.
+It makes the tile boundary checkable from software: a driver that submitted
+*n* activations and reads anything but *n* has lost beats between the DMA and
+the stream.
 
 ## The streams
 
@@ -90,7 +88,7 @@ reproduces it on the corresponding beat on the way out.
 
 `tready` is asserted only when the beat will actually be consumed — never while
 EN is low, never while the output register is occupied and the consumer is not
-taking it — and a beat that has been accepted is never dropped.
+taking it — and an accepted beat is never dropped.
 
 ## Driving a tile
 
@@ -103,6 +101,5 @@ while (!(readl(base + STATUS) & STATUS_DONE))
 uint32_t beats = readl(base + COUNT);        /* must equal n */
 ```
 
-Polled, like the first accelerator. The DMA raises an interrupt per direction
-and the S2MM one is what a driver would wait on instead; that is an addition,
-not a prerequisite.
+Polled, like the first accelerator. The DMA raises an interrupt per direction;
+a driver could wait on the S2MM one instead — an addition, not a prerequisite.

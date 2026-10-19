@@ -2,11 +2,9 @@
 
 The path a conforming accelerator takes from a SystemVerilog file to a design
 running on the board, and what each stage hands to the next. What a module must
-present to be carried along it is
-[the accelerator contract](accelerator-contract.md); the vocabulary is
-[CONTEXT.md](../CONTEXT.md). The accelerators that happen to occupy it today are
-[docs/example-accelerators.md](example-accelerators.md) and are not the subject
-of this file.
+present is [the accelerator contract](accelerator-contract.md); the vocabulary
+is [CONTEXT.md](../CONTEXT.md); the accelerators in it today are in
+[example-accelerators.md](example-accelerators.md).
 
 ```
                     rtl/*.sv  ─────────────────────────────┐
@@ -34,54 +32,51 @@ of this file.
                       board: firmware overlay + three .ko ──┘
 ```
 
-The line across the middle is the one that matters most when reading this
-repository: everything above it is reproducible by anyone with Docker, and
-everything below it needs the build host, its licence and — for the last step —
-a board on a network segment CI cannot reach. `make regress` is exactly the
-part above the line, which is why it is what CI runs.
+The line across the middle is the one that matters. Everything above it is
+reproducible by anyone with Docker. Everything below needs the build host, its
+licence and — for the last step — a board on a network segment CI cannot reach.
+`make regress` is exactly the part above the line, which is why CI runs it.
 
 ## Simulation
 
 `make sim` builds each seam with Verilator and runs its cocotb coroutines
-through a pytest entry point. Three seams, 31 tests. Each `tb/<dut>/` holds a
-pair: `tb_<dut>.py` has the coroutines, `test_<dut>.py` is the pytest entry
-using the cocotb 2.x runner (`cocotb_tools.runner.get_runner`).
+through pytest: three seams, 31 tests. Each `tb/<dut>/` holds a pair —
+`tb_<dut>.py` (coroutines) and `test_<dut>.py` (pytest entry, cocotb 2.x
+runner `cocotb_tools.runner.get_runner`).
 
-Two rules shape every seam.
+Two rules shape every seam:
 
-**Tests sit at RTL module boundaries and drive only top-level ports.** A
-wrapper's tests never reach inside to the module it wraps: the interface the
-wrapper presents is the whole reason it exists, and a test that sampled
-internal state would keep passing with that interface broken.
+- **Tests sit at RTL module boundaries and drive only top-level ports.** A
+  wrapper's tests never reach inside the module it wraps: the wrapper's
+  interface is why it exists, and a test that sampled internal state would keep
+  passing with that interface broken.
+- **The reference is a numpy golden model under `tb/model/`, one per
+  accelerator.** Every seam imports the same one rather than a copy, so the
+  module-level and AXI-level seams cannot drift into two opinions of what the
+  accelerator computes. If they disagree, that is a finding, not a maintenance
+  task.
 
-**The reference is a numpy golden model, one per accelerator, under
-`tb/model/`.** Every seam that needs it imports the same one rather than
-carrying a copy, so the module-level seam and the AXI-level seam cannot drift
-into two different opinions of what the accelerator computes. If they ever
-disagree, that is a finding, not a maintenance task.
-
-The dump is VCD (`waves=True`), one per seam under `sim/<dut>/dump.vcd`.
+The dump is VCD (`waves=True`), one per seam at `sim/<dut>/dump.vcd`.
 
 ## Coverage
 
 `make coverage` writes lcov reports to `sim/coverage/`, plus HTML and an
 annotated RTL listing under `rtl_annotated/`.
 
-- **`rtl.info`** — Verilator `--coverage` through `verilator_coverage`. This is
-  the hardware signal.
-- **`python.info`** — pytest-cov. It measures the *runner*, not the coroutines,
-  which execute inside cocotb's embedded interpreter rather than the pytest
-  process. Treat it as a sanity check on the harness and nothing more.
+| File | Source | Meaning |
+| --- | --- | --- |
+| `rtl.info` | Verilator `--coverage` via `verilator_coverage` | The hardware signal. |
+| `python.info` | pytest-cov | Measures the *runner* only — the coroutines run inside cocotb's embedded interpreter, not the pytest process. A sanity check on the harness, nothing more. |
 
-The Dev Container ships Coverage Gutters preconfigured to read both files, so
-`make coverage` then *"Coverage Gutters: Watch"* colours the RTL in the editor.
+The Dev Container ships Coverage Gutters configured for both files:
+`make coverage`, then *"Coverage Gutters: Watch"* colours the RTL in the editor.
 
 ## Sequential equivalence
 
-Simulation shows a design passes the tests someone thought to write. `make sec`
-proves something stronger: that two revisions produce identical outputs for
-*every* input sequence. It is the check a behaviour-preserving change has to
-clear — retiming a pipeline, rewriting an operator, restructuring decode logic.
+Simulation shows a design passes the tests someone wrote. `make sec` proves two
+revisions produce identical outputs for *every* input sequence. It is the check
+a behaviour-preserving change must clear — retiming a pipeline, rewriting an
+operator, restructuring decode logic.
 
 ```bash
 make sec GOLDEN=HEAD                    # working tree vs last commit
@@ -89,7 +84,7 @@ make sec GOLDEN=HEAD~3 REVISED=HEAD     # two commits
 make sec GOLDEN=../golden_rtl           # against an out-of-tree checkout
 ```
 
-`GOLDEN` is the reference, a git revision or a directory holding `rtl/`;
+`GOLDEN` is the reference: a git revision or a directory holding `rtl/`.
 `REVISED` defaults to the working tree. Both sides are materialised under
 `sim/sec/{gold,gate}/`, so the check never touches the checkout.
 
@@ -103,77 +98,73 @@ make sec GOLDEN=../golden_rtl           # against an out-of-tree checkout
 The `miter` engine zero-initialises every register on both sides. Both
 revisions reset synchronously with no RTL init value, so an unconstrained miter
 would start the two copies in different arbitrary states and fail at t=0 for
-reasons that have nothing to do with equivalence. Zero-init pins them to a
-common start, which is also how a Zynq FPGA brings registers up after
-configuration.
+reasons unrelated to equivalence. Zero-init gives them a common start — also
+how a Zynq FPGA brings registers up after configuration.
 
-`make sec` reads RTL, so it cannot see a change made in the block design. The
-check for that one is the synthesis checksum — see the conventions in
+`make sec` reads RTL, so it cannot see a block-design change. That one is
+checked by the synthesis checksum — see the conventions in
 [CLAUDE.md](../CLAUDE.md).
 
 ## Synthesis, implementation and the board
 
-`make synth` synthesises **one module out of context** — no surrounding design,
-no I/O buffers — and reports what that module costs and how fast it runs. It is
-a measurement, not a step towards a bitstream, and the number it produces is
-the input to design questions rather than a gate anything has to pass.
+| Target | Does | Produces |
+| --- | --- | --- |
+| `make synth` | Synthesises **one module out of context** — no surrounding design, no I/O buffers. | What the module costs and how fast it runs. A measurement feeding design questions, not a step towards a bitstream or a gate. |
+| `make impl` | Places and routes the block design in [flows/embedded/bd/system.tcl](../flows/embedded/bd/system.tcl) — Zynq PS, AXI interconnect, an AXI DMA feeding the accelerator's stream, the accelerator's AXI4-Lite slave on the PS's master port — against the per-board PL clock target in [flows/common/boards.sh](../flows/common/boards.sh). | Routed checkpoint; summary in `build/<board>/impl/impl_summary.txt`. |
+| `make bitstream` | Writes the bitstream from the routed checkpoint. | `.bit` |
+| `make xsa` | Exports the hardware handoff: PS configuration, address map, block-design metadata. | `.xsa`, the source FSBL, PMU firmware and device tree are generated from. |
+| `make boot` | Generates boot firmware from the handoff. | FSBL, PMU firmware, device tree. |
+| `make overlay` | Packages the bitstream and generated PL device tree. | A firmware overlay, loaded by running Linux through the ZynqMP FPGA manager. |
 
-`make impl` builds the real thing. The block design in
-[flows/embedded/bd/system.tcl](../flows/embedded/bd/system.tcl) — Zynq PS, AXI
-interconnect, an AXI DMA feeding the accelerator's stream, the accelerator's
-AXI4-Lite slave on the PS's master port — is placed and routed against the
-per-board PL clock target in
-[flows/common/boards.sh](../flows/common/boards.sh), with a summary in
-`build/<board>/impl/impl_summary.txt`. The design is written as Tcl rather than
-a checked-in `.bd` so it is reviewable in a diff and rebuildable from the
-repository.
+The block design is Tcl rather than a checked-in `.bd` so it is reviewable in a
+diff and rebuildable from the repository.
 
-`make bitstream` writes the `.bit` from the routed checkpoint. `make xsa`
-exports the hardware handoff — the PS configuration, the address map and the
-block design's metadata — which is what FSBL, the PMU firmware and the device
-tree are generated from. `make boot` generates those; `make overlay` packages
-the bitstream and the generated PL device tree into a firmware overlay, the
-thing a running Linux loads through the ZynqMP FPGA manager.
-
-The device-tree nodes are not written by hand. They come from the same hardware
-handoff as everything else, so the accelerator's address has one source rather
-than a copy in a file someone has to remember to update.
+Device-tree nodes are generated from the same hardware handoff, not written by
+hand, so the accelerator's address has one source rather than a copy someone
+must remember to update.
 
 ## The PS side
 
-The driver is in two layers, and the split is the contract's
+The driver has two layers, split along the contract
 ([ADR-0005](adr/0005-the-accelerators-driver-is-in-scope.md),
 [driver/README.md](../driver/README.md)):
 
 - **`accel_transport.ko`** knows the contract and nothing above offset `0x00`.
-  It moves a tile between memory and the accelerator's stream, which is the
-  same job for every conforming accelerator, so it is written once.
-- **one register layer per accelerator** owns the platform driver and answers
-  what that accelerator's register map says: whether a tile may start, what
-  starts it, how to tell it finished, and what a read gives back.
+  It moves a tile between memory and the accelerator's stream — the same job
+  for every conforming accelerator, so it is written once.
+- **One register layer per accelerator** owns the platform driver and
+  implements that accelerator's register map: whether a tile may start, what
+  starts it, how to tell it finished, what a read returns.
 
-Both are built on the board rather than in a container — the toolchain image
-carries no kernel headers and the Vivado image is x86.
+Both are built on the board, not in a container: the toolchain image has no
+kernel headers and the Vivado image is x86.
 
 ## Adding an accelerator
 
-The environment's claim is that a module satisfying the contract gets all of
-the above without the environment being modified for it. Concretely:
+The environment's claim: a module satisfying the contract gets all of the above
+without the environment being modified for it. The contract covers the hardware
+boundary; steps 2–6 are what every design supplies for itself.
 
 1. Add `rtl/<module>.sv`, presenting what
    [the accelerator contract](accelerator-contract.md) requires.
-2. Write its register map as `docs/register-map-<name>.md`. That document is
-   the specification, not a description of what the RTL turned out to do.
-3. Add a numpy golden model under `tb/model/`.
-4. Add `tb/<module>/tb_<module>.py` and `tb/<module>/test_<module>.py`; copy an
-   existing pair and swap `HDL_TOPLEVEL`, `TEST_MODULE` and `SOURCES`.
-   `tb/conftest.py` puts each `tb/<module>/` on `sys.path`, so the test module
-   resolves regardless of where pytest was invoked.
+2. Write its register map as `docs/register-map-<name>.md`, in the shape of
+   [register-map-sparse-cnn.md](register-map-sparse-cnn.md). It is the
+   specification, not a description of what the RTL turned out to do: the
+   testbench checks the RTL against it, so where they disagree the RTL is wrong.
+3. Add a numpy golden model under `tb/model/`, imported by every seam that
+   verifies the design and never copied into one.
+4. Add `tb/<module>/tb_<module>.py` and `tb/<module>/test_<module>.py`,
+   driving only top-level ports. Copy an existing pair and swap `HDL_TOPLEVEL`,
+   `TEST_MODULE` and `SOURCES`. `tb/conftest.py` puts each `tb/<module>/` on
+   `sys.path`, so the test module resolves wherever pytest was invoked.
 5. Add the sources to [scripts/rtl_sources.sh](../scripts/rtl_sources.sh) — the
-   single list that lint, `make sec` and both synthesis flows all read.
-6. Add a register layer under `driver/` against the map from step 2.
+   single list lint, `make sec` and both synthesis flows read.
+6. If it is to be driven from Linux, add a register layer under `driver/`
+   against the map from step 2. The transport that moves its tiles comes with
+   the contract; what binds to its `compatible` string and reads its registers
+   does not. See [driver/README.md](../driver/README.md).
 7. `make regress`.
 
-Nothing in that list touches the transport layer, the block design or the
-overlay generator. Where it turns out that something does, the contract was
-incomplete and that is what needs fixing — not the accelerator.
+Nothing here touches the transport layer, the block design or the overlay
+generator. If something turns out to, the contract was incomplete — fix the
+contract, not the accelerator.
