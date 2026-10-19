@@ -17,7 +17,17 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 IMAGE="${IMAGE:-zynq-rtl-flow-vivado:latest}"
 XILINX_PREFIX="${XILINX_PREFIX:-/home/ubuntu/disk/lab/xilinx}"
-DOCKER="${DOCKER:-docker}"
+
+# The lab's /etc/bash.bashrc aliases docker to podman for anyone outside the
+# docker group, but an alias does not reach a script: without this, such a user
+# gets "permission denied" on the docker socket instead of their own podman.
+if [[ -z "${DOCKER:-}" ]]; then
+  if ! id -nG | grep -qw docker && command -v podman >/dev/null 2>&1; then
+    DOCKER=podman
+  else
+    DOCKER=docker
+  fi
+fi
 
 if [[ "${1:-}" == "build" ]]; then
   exec "$DOCKER" build -f "$ROOT/docker/vivado.Dockerfile" \
@@ -45,6 +55,12 @@ args=(--rm -v "$ROOT":/workspace -w /workspace
 # reach it. It also spares us mapping any ports for hw_server.
 args+=(--network host)
 
+# Rootless podman maps the image's user onto a subordinate UID unless told to
+# keep the caller's, and the bind-mounted workspace is then read-only to it.
+if [[ "$(basename "$DOCKER")" == podman ]]; then
+  args+=(--userns=keep-id)
+fi
+
 # The GUI draws on the host's display. The X server runs with -nolisten tcp, so
 # this is the unix socket and nothing else; xhost is what lets the container's
 # user through, and it is a deliberate concession (docs/adr/0002-...).
@@ -60,8 +76,14 @@ fi
 
 # Vivado writes licence and preference state under $HOME; keep it on the host so
 # it survives the container, and out of the workspace so it never reaches git.
-mkdir -p "$XILINX_PREFIX/.home/.Xilinx"
-args+=(-v "$XILINX_PREFIX/.home":/home/dev -e HOME=/home/dev)
+# The shared one belongs to whoever installed the toolchain; anyone else keeps
+# their own, since Vivado will not start with a $HOME it cannot write to.
+VIVADO_HOME="${VIVADO_HOME:-$XILINX_PREFIX/.home}"
+if [[ ! -w "$VIVADO_HOME" ]]; then
+  VIVADO_HOME="${XDG_DATA_HOME:-$HOME/.local/share}/zynq-rtl-flow/vivado-home"
+fi
+mkdir -p "$VIVADO_HOME/.Xilinx"
+args+=(-v "$VIVADO_HOME":/home/dev -e HOME=/home/dev)
 
 # From 2026.1 Vivado refuses to launch without a licence, free tier included.
 # Pointed at explicitly rather than relying on the default search: the default
