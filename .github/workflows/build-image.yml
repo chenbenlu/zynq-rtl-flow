@@ -39,6 +39,7 @@ jobs:
         with:
           context: .
           file: docker/Dockerfile
+          target: runtime
           push: true
           tags: |
             ghcr.io/${{ steps.vars.outputs.owner }}/zynq-rtl-flow-dev:latest
