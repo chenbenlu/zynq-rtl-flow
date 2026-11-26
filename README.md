@@ -25,15 +25,15 @@ model and a cocotb seam:
   a writable slope.
 
 Everything under `make regress` runs anywhere Docker does. Synthesis and
-everything after it need the build host, its node-locked licence and, for the
-last step, a board on a network segment CI cannot reach.
+everything after it need the AMD toolchain, a licence and, for the last step, a
+board.
 
 ## Toolchain (pinned)
 
 Verilator, cocotb, Verible, Python and the base image are pinned in
 [docker/Dockerfile](docker/Dockerfile); Python packages are mirrored in
-[pyproject.toml](pyproject.toml). Vivado / Vitis **2026.1** runs on the build
-host only. Versions and the reason for each:
+[pyproject.toml](pyproject.toml). Vivado / Vitis **2026.1** is yours to install;
+the repository does not ship or install it. Versions and the reason for each:
 [CLAUDE.md](CLAUDE.md#pinned-tooling-keep-in-sync).
 
 ## Prerequisites
@@ -110,10 +110,11 @@ podman run --rm --userns=keep-id -v "$PWD":/workspace -w /workspace \
 For FST, pass `--trace-fst` in the runner `build_args`
 (see [tb/sparse_mac_pe/test_sparse_mac_pe.py](tb/sparse_mac_pe/test_sparse_mac_pe.py)).
 
-## Synthesis and implementation (build host only)
+## Synthesis and implementation
 
-The AMD toolchain lives on the **build host**, `RTXWS`, in a second container
-that is separate from the simulation image and never published to a registry.
+These targets need Vivado / Vitis **2026.1**, installed with AMD's own installer
+wherever you like, and a licence: from 2026.1 Vivado will not launch without
+one, free tier included.
 
 Two flows, not interchangeable:
 
@@ -124,44 +125,47 @@ Two flows, not interchangeable:
 
 Vocabulary: [CONTEXT.md](CONTEXT.md). Decisions: [docs/adr/](docs/adr/).
 
-### One-time setup on the build host
+### Pointing the flows at your toolchain
 
-Run these **as `ubuntu`**: the persistent disk is owned by that account, and the
-container's user is aligned to its UID.
+Either source the toolchain before running `make`:
 
 ```bash
-# 1. Download the AMD installer yourself (it needs a signed-in account) into
-#    /home/ubuntu/disk/lab/vivado-installer/. The ~400 MB web installer is the
-#    expected one; it pulls only the device families you select.
-bash scripts/provision-vivado.sh --auth         # store an AMD token, once
-bash scripts/provision-vivado.sh --config-gen   # generate + edit the config
-bash scripts/provision-vivado.sh                # install (hours)
-
-# 2. Build the container that runs it
-make vivado-image
-
-# 3. When the KV260 is cabled in. There is no default NIC — name the interface
-#    it is cabled to ('ip -4 -br addr' lists them). Teardown (--down) needs no
-#    NIC=: it finds the link by the address on it, and touches nothing else.
-sudo NIC=<nic> bash scripts/provision-board-net.sh
+source <prefix>/2026.1/Vivado/settings64.sh   # Vitis's for make boot/hls/xclbin
 ```
 
-The toolchain is installed on the host's persistent disk and mounted into the
-container, not baked into the image —
-[ADR-0001](docs/adr/0001-vivado-installed-on-persistent-disk.md) has why and
-what it costs.
+or give the install prefix and let each flow source what it needs:
+
+```bash
+export XILINX_ROOT=<prefix>                    # e.g. /tools/Xilinx
+```
+
+### On a host OS the toolchain does not support
+
+2026.1 supports Ubuntu 22.04 and 24.04. On anything else, run it in the optional
+Vivado container, which carries the runtime dependencies on Ubuntu 24.04 and
+mounts your install at the same path:
+
+```bash
+export XILINX_ROOT=<prefix>
+make vivado-image            # build it once
+make vivado-shell            # a shell inside it; run make targets there
+make vivado-gui              # the GUI, on the host's X display
+```
+
+`scripts/vivado-run.sh` documents its settings: the licence file, where the
+container's `$HOME` is kept, and opt-ins for host networking (`HOST_NET=1`) and
+X (`GUI=1`).
 
 ### Running a flow
 
 ```bash
-make vivado-shell            # a shell inside the Vivado container
 make synth                   # OOC baseline for sparse_cnn_axi on kv260
 make synth RTL_TOP=sparse_mac_pe BOARD=zcu104 CLK_PERIOD=2.5
 make impl BOARD=kv260        # place & route the system design
 make bitstream BOARD=kv260   # .bit + .bin from the routed checkpoint
 make xsa BOARD=zcu104        # hardware handoff for the PS-side boot flow
 make overlay BOARD=zcu104    # bitstream + device tree, ready to load
-make vivado-gui              # GUI on the build host's display
+bash flows/embedded/gui.sh build/kv260/impl/prj/impl_prj.xpr   # the GUI
 ```
 
 `make synth` measures one module in isolation; it is not a step towards a
@@ -173,6 +177,9 @@ list: [CLAUDE.md](CLAUDE.md).
 platform — and each reports exactly what is missing.
 
 ### Loading it on the ZCU104
+
+The rest of this README describes the maintainer's lab: the build host is
+`RTXWS`, and the boards hang off it as ADR-0003 and ADR-0004 describe.
 
 The build host cannot reach the board (server VLAN vs workstation VLAN), so the
 overlay is built on the build host and copied through a machine that sees both.
@@ -226,10 +233,18 @@ the first check that the design on the bus is the one that was built. To unload:
   system, not at boot.
 - **KV260** is cabled directly to the build host's second NIC on a private
   segment ([ADR-0003](docs/adr/0003-kv260-direct-attached-to-build-host.md)).
+  To bring the link up, name the interface it is cabled to
+  (`ip -4 -br addr` lists them); teardown (`--down`) finds the link by its
+  address and needs no `NIC=`. Running the Vivado container against it needs
+  `HOST_NET=1`.
+
+  ```bash
+  sudo NIC=<nic> bash scripts/provision-board-net.sh
+  ```
 
 Both devices are covered by the free tier, but from 2026.1 the free tier is a
 licence, not the absence of one: Vivado refuses to launch without a licence
-file, and the build host's is node-locked and expires. Measurement and failure
+file, and the maintainer's is node-locked and expires. Measurement and failure
 mode: [CLAUDE.md](CLAUDE.md#gotchas-learned-during-setup).
 
 ## Continuous Integration
@@ -251,7 +266,7 @@ rtl/        SystemVerilog — accel_contract_pkg (the environment's), then one
             group per example accelerator (sparse_cnn_*, relu_*)
 tb/         cocotb testbenches + pytest runners, one directory per seam
 flows/      synthesis flows — common/ (board map), embedded/, accel/
-scripts/    lint / format / regress / wave / sec + Vivado provisioning helpers;
+scripts/    lint / format / regress / wave / sec + the Vivado container wrapper;
             rtl_sources.sh is the single source list every consumer reads
 tests/      bash tests for scripts/ (make test-scripts)
 driver/     PS-side driver: a transport layer shared by every conforming

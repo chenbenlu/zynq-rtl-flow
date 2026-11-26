@@ -1,9 +1,8 @@
 #!/usr/bin/env bash
-# Vivado GUI on the build host's display — block design and implementation reports.
+# Vivado GUI — block design and implementation reports.
 #
-#   make vivado-gui
-#   make vivado-gui PRJ=build/zcu104/impl/prj/impl_prj.xpr
-#   bash flows/embedded/gui.sh build/kv260/impl/prj/impl_prj.xpr   # inside the container
+#   bash flows/embedded/gui.sh build/kv260/impl/prj/impl_prj.xpr
+#   make vivado-gui PRJ=build/zcu104/impl/prj/impl_prj.xpr   # from the container
 
 source "$(dirname "${BASH_SOURCE[0]}")/../common/env.sh"
 vivado_env Vivado

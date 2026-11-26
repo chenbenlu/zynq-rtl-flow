@@ -1,5 +1,12 @@
 # Vivado is installed on the build host's persistent disk, not baked into the image
 
+> **Status:** partially superseded by
+> [ADR-0009](0009-the-amd-toolchain-is-the-users-install.md). The decision below
+> stands. The Consequences and "The installer" sections do not: the provisioning
+> script they describe has been removed, and where the toolchain is installed is
+> the user's choice. They are left as written as the record of how the
+> maintainer's build host was set up.
+
 Every other tool in this repo lives inside its container image, so a reader will
 reasonably expect the Vivado image to be self-contained too. It is not: the
 image carries only Vivado's runtime dependencies, and the toolchain itself is

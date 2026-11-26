@@ -12,8 +12,8 @@ COV_DIR     := $(SIM_DIR)/coverage
 COV_DAT     := $(shell find $(SIM_DIR) -name 'coverage.dat' 2>/dev/null)
 
 # Synthesis flows. BOARD selects the silicon (see flows/common/boards.sh);
-# KERNEL selects an HLS kernel in the acceleration flow. The flows run inside
-# the Vivado container — see scripts/vivado-run.sh.
+# KERNEL selects an HLS kernel in the acceleration flow. The flows need the AMD
+# toolchain: source its settings64.sh first, or set XILINX_ROOT.
 BOARD       ?= kv260
 KERNEL      ?= sparse_conv
 CLK_PERIOD  ?= 3.0
@@ -114,7 +114,7 @@ hls:
 xclbin:
 	@bash flows/accel/xclbin.sh
 
-## --- The Vivado container (run these on the build host, outside it) ---
+## --- Optional Vivado container, for a host OS the toolchain does not support ---
 
 ## vivado-image: build the Vivado container image
 vivado-image:
@@ -124,9 +124,9 @@ vivado-image:
 vivado-shell:
 	@bash scripts/vivado-run.sh
 
-## vivado-gui: launch the Vivado GUI on the build host's display
+## vivado-gui: launch the Vivado GUI from the container on the host's display
 vivado-gui:
-	@bash scripts/vivado-run.sh bash flows/embedded/gui.sh $(PRJ)
+	@GUI=1 bash scripts/vivado-run.sh bash flows/embedded/gui.sh $(PRJ)
 
 ## format: rewrite SystemVerilog in place with Verible
 format:

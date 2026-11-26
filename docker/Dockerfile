@@ -4,7 +4,7 @@
 #   Stage 1 (builder):  compile Verilator from a pinned source tag
 #   Stage 2 (runtime):  Verilator + Verible + GTKWave + Python/cocotb venv
 #                       -> the dev image, published to GHCR for CI + Dev Container
-#   Stage 3 (vivado):   runtime + AMD toolchain runtime deps, build host only
+#   Stage 3 (vivado):   runtime + AMD toolchain runtime deps, optional
 # Pinned versions keep the image reproducible across local + CI (GHCR).
 # =============================================================================
 
@@ -113,11 +113,14 @@ CMD ["bash"]
 # -----------------------------------------------------------------------------
 # Stage 3: vivado — runtime dependencies for the AMD toolchain.
 #
-# The toolchain itself is NOT in this image. It is installed on the build host's
-# persistent disk and bind-mounted in at the same absolute path it was installed
-# to (settings64.sh sources its sub-scripts by absolute path, so the mount point
-# is not ours to choose); see docs/adr/0001-vivado-installed-on-persistent-disk.md
-# for why, and scripts/provision-vivado.sh for how it gets there. Building on the
+# Optional: needed only on a host whose OS the toolchain does not support. On a
+# supported OS, the flows run directly against the user's own install.
+#
+# The toolchain itself is NOT in this image. The user installs it on the host
+# and it is bind-mounted in at the same absolute path it was installed to
+# (settings64.sh sources its sub-scripts by absolute path, so the mount point is
+# not ours to choose); see docs/adr/0001-vivado-installed-on-persistent-disk.md
+# and docs/adr/0009-the-amd-toolchain-is-the-users-install.md. Building on the
 # runtime stage puts simulation and synthesis in one container; the image is
 # never pushed to a registry (docs/adr/0008-...).
 #

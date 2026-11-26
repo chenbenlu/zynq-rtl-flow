@@ -109,14 +109,16 @@ Self-contained and published to GHCR.
 _Avoid_: dev image, sim container
 
 **Vivado image**:
-The container holding the AMD toolchain's *runtime dependencies* only. The
-toolchain itself is not inside it — see [ADR-0001](docs/adr/0001-vivado-installed-on-persistent-disk.md).
-Never published to a registry.
+The optional container holding the AMD toolchain's *runtime dependencies* only,
+for a host OS the toolchain does not support. The toolchain itself is not inside
+it — see [ADR-0001](docs/adr/0001-vivado-installed-on-persistent-disk.md) and
+[ADR-0009](docs/adr/0009-the-amd-toolchain-is-the-users-install.md). Never
+published to a registry.
 _Avoid_: synthesis image, Xilinx image
 
 **Build host**:
-`RTXWS`, the x86 workstation the Vivado image runs on. The only machine where
-synthesis, implementation and board programming happen.
+Any machine with the AMD toolchain installed, where synthesis, implementation
+and board programming happen. The maintainer's is `RTXWS`.
 _Avoid_: server, rtx, workstation
 
 ## The example design
