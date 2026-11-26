@@ -15,8 +15,9 @@
 # VIVADO_HOME    the container's $HOME, kept between runs
 #                (default ${XDG_DATA_HOME:-~/.local/share}/zynq-rtl-flow/vivado-home)
 # GUI=1          share the host's X socket (docs/adr/0002-...)
-# HOST_NET=1     use the host's network, e.g. to reach a board on a private
-#                segment behind this host (docs/adr/0003-...)
+# HOST_NET       1/0 forces the host's network on/off; unset, it is on only for
+#                a node-locked licence. Also needed to reach a board on a
+#                private segment behind this host (docs/adr/0003-...)
 # =============================================================================
 set -euo pipefail
 
@@ -63,10 +64,6 @@ args=(--rm -v "$ROOT":/workspace -w /workspace
       -v "$XILINX_ROOT":"$XILINX_ROOT":ro
       -e "XILINX_ROOT=$XILINX_ROOT")
 
-if [[ "${HOST_NET:-0}" == 1 ]]; then
-  args+=(--network host)
-fi
-
 # Rootless podman maps the image's user onto a subordinate UID unless told to
 # keep the caller's, and the bind-mounted workspace is then read-only to it.
 # podman 3.x's keep-id still runs as the image's USER (dev, UID 1000), so the
@@ -100,11 +97,25 @@ args+=(-v "$VIVADO_HOME":/home/dev -e HOME=/home/dev)
 # Pointed at explicitly: a licence that is merely *not found* fails identically
 # to one that does not cover the part, which is the harder question to debug.
 LICENSE_FILE="${LICENSE_FILE:-$HOME/.Xilinx/Xilinx.lic}"
+node_locked=0
 if [[ -f "$LICENSE_FILE" ]]; then
   args+=(-v "$LICENSE_FILE":/licence/Xilinx.lic:ro
          -e XILINXD_LICENSE_FILE=/licence/Xilinx.lic)
+  if grep -oE 'HOSTID=[^[:space:];]+' "$LICENSE_FILE" | grep -qviE '=(ANY|DEMO)$'; then
+    node_locked=1
+  fi
 else
   echo ">> warning: no licence at $LICENSE_FILE — Vivado will refuse to start" >&2
+fi
+
+# A node-locked licence names the host's NIC by its MAC. In a container with its
+# own network namespace that NIC is not there, and FlexLM does not report a
+# host mismatch: Vivado segfaults inside the licence checkout before printing
+# anything about licensing.
+if [[ "${HOST_NET:-$node_locked}" == 1 ]]; then
+  args+=(--network host)
+elif (( node_locked )); then
+  echo ">> warning: HOST_NET=0 with a node-locked licence — Vivado will crash at licence checkout" >&2
 fi
 
 if [[ -t 0 ]]; then args+=(-it); fi

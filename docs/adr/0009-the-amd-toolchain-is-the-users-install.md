@@ -27,7 +27,8 @@ has nothing to add to it that is not specific to one host.
   removed.
 - The Vivado image (the `vivado` stage, ADR-0008) is optional: a way to run
   the toolchain on a host whose OS AMD does not support. Its run wrapper mounts nothing it was not asked to:
-  host networking (`HOST_NET=1`) and the X socket (`GUI=1`) are opt-in, and the
+  the X socket (`GUI=1`) is opt-in; host networking (`HOST_NET`) is on only
+  when the licence is node-locked, because FlexLM must see the host's NIC; and the
   container's `$HOME` lives under the user's XDG data directory rather than
   inside the toolchain prefix, which may be shared or read-only.
 

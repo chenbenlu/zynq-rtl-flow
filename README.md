@@ -153,8 +153,9 @@ make vivado-gui              # the GUI, on the host's X display
 ```
 
 `scripts/vivado-run.sh` documents its settings: the licence file, where the
-container's `$HOME` is kept, and opt-ins for host networking (`HOST_NET=1`) and
-X (`GUI=1`).
+container's `$HOME` is kept, host networking (`HOST_NET`; on by default for a
+node-locked licence, which the container otherwise cannot match to the host's
+NIC) and X (`GUI=1`).
 
 ### Running a flow
 
@@ -236,7 +237,7 @@ the first check that the design on the bus is the one that was built. To unload:
   To bring the link up, name the interface it is cabled to
   (`ip -4 -br addr` lists them); teardown (`--down`) finds the link by its
   address and needs no `NIC=`. Running the Vivado container against it needs
-  `HOST_NET=1`.
+  host networking, which the build host's node-locked licence already turns on.
 
   ```bash
   sudo NIC=<nic> bash scripts/provision-board-net.sh
