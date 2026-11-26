@@ -47,8 +47,8 @@ make vivado-shell  # shell inside it
 
 | | Toolchain image | Vivado image |
 |---|---|---|
-| Dockerfile | `docker/Dockerfile` | `docker/vivado.Dockerfile` |
-| Contains | Verilator/cocotb/Verible, self-contained | AMD toolchain *runtime deps only*; the toolchain is bind-mounted from the build host's persistent disk |
+| Dockerfile | `docker/Dockerfile`, stage `runtime` | `docker/Dockerfile`, stage `vivado` (`FROM runtime`, ADR-0008) |
+| Contains | Verilator/cocotb/Verible, self-contained | the toolchain image plus AMD toolchain *runtime deps only*; the toolchain is bind-mounted from the build host's persistent disk |
 | Published | GHCR; used by CI and the Dev Container | never pushed, never used by CI |
 | Runs | anywhere — everything under `make sim` | only on the **build host** (`RTXWS`) |
 
@@ -57,7 +57,7 @@ The toolchain is not in the Vivado image because a 100 GB image would sit on a
 any other machine fails with a message saying so.
 
 **Keep the two images separate.** Adding Vivado to the toolchain image would make
-every CI lint/sim run pull tens of GB.
+every CI lint/sim run pull tens of GB; only the `runtime` stage is published.
 
 ## Synthesis flows
 
@@ -108,8 +108,8 @@ xclbin work", the actual task is the missing kernel, not the script.
   contract's and moves tiles for any conforming accelerator; `sparse_cnn.c` and
   `relu.c` are one register map each. Three `.ko`s, built on the board.
   `run-tile.py` checks either one against `tb/model/`.
-- `docker/Dockerfile` — multi-stage; Verilator built from source.
-- `docker/vivado.Dockerfile` — AMD toolchain runtime deps (toolchain itself is mounted).
+- `docker/Dockerfile` — multi-stage; Verilator built from source. Stage `vivado`
+  adds the AMD toolchain runtime deps (toolchain itself is mounted).
 - `.devcontainer/devcontainer.json` — consumes the GHCR image (the local `build`
   block is commented out; building needs ~8 GB RAM). Engine-agnostic: Dev
   Containers adds `--userns=keep-id` itself under podman, so podman-specific
@@ -234,7 +234,7 @@ Each entry: **symptom** → cause → what the repo does about it.
   the AMD launchers probe the display with `xlsclients` and, finding none, start
   their own `Xvfb`, so they need `x11-utils` and `xvfb` even with no GUI. Nothing
   in the message mentions X, so it reads like a broken install.
-  `docker/vivado.Dockerfile` carries both for this reason alone — the GUI needs
+  The `vivado` stage of `docker/Dockerfile` carries both for this reason alone — the GUI needs
   only the host's X socket (ADR-0002). `dbus-launch is not available` also
   appears; it is a warning and the tools run without it.
 - **`docker run` hangs after the tool's command exits** → a tool that starts
@@ -362,3 +362,4 @@ vocabulary (permanent) and the example design's (goes when the example does).
 | 0005 | the board | the accelerator's driver is in scope; the boot image is not |
 | 0006 | what the repo is for | the environment is the deliverable, the accelerator its first example — partially supersedes 0004, corrects 0005's alternatives |
 | 0007 | what the repo is for | rename to zynq-rtl-flow — supersedes 0006's decision to keep the old name |
+| 0008 | synthesis environment | the Vivado image is the `vivado` stage of the dev image |

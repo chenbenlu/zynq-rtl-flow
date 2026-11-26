@@ -4,7 +4,7 @@
 #
 # Runs on the BUILD HOST, not inside a container — this is the step the Vivado
 # image deliberately does not perform (docs/adr/0001-...). Together with
-# docker/vivado.Dockerfile and the install config it checks in, it is the
+# the vivado stage of docker/Dockerfile and the install config it checks in, it is the
 # complete, re-runnable description of the environment.
 #
 #   bash scripts/provision-vivado.sh --auth         # first time: store an AMD token

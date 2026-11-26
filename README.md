@@ -81,7 +81,7 @@ bind-mounted files stay yours. Nothing podman-specific belongs in
 ## Quickstart — raw Docker / Podman (no VS Code)
 
 ```bash
-docker build -f docker/Dockerfile -t zynq-rtl-flow-dev:latest .
+docker build -f docker/Dockerfile --target runtime -t zynq-rtl-flow-dev:latest .
 
 # On Linux, --user keeps artifacts in the mounted workspace owned by you.
 docker run --rm -v "$PWD":/workspace -w /workspace \
@@ -92,7 +92,7 @@ docker run --rm -v "$PWD":/workspace -w /workspace \
 With rootless podman, drop `--user` and let `keep-id` do the mapping:
 
 ```bash
-podman build -f docker/Dockerfile -t zynq-rtl-flow-dev:latest .
+podman build -f docker/Dockerfile --target runtime -t zynq-rtl-flow-dev:latest .
 podman run --rm --userns=keep-id -v "$PWD":/workspace -w /workspace \
   -e HOME=/tmp zynq-rtl-flow-dev:latest make sim
 ```
@@ -256,7 +256,7 @@ scripts/    lint / format / regress / wave / sec + Vivado provisioning helpers;
 tests/      bash tests for scripts/ (make test-scripts)
 driver/     PS-side driver: a transport layer shared by every conforming
             accelerator, and one register layer per accelerator
-docker/     Dockerfile (simulation) + vivado.Dockerfile (synthesis)
+docker/     Dockerfile: runtime stage (simulation), vivado stage (synthesis)
 sim/        simulation artifacts, waveforms, coverage (gitignored)
 build/      synthesis + implementation artifacts (gitignored)
 docs/       accelerator contract, environment, example accelerators, one
