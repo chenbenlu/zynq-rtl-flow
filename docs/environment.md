@@ -20,7 +20,7 @@ is [CONTEXT.md](../CONTEXT.md); the accelerators in it today are in
   └───────────────────────────────────────────┘            │
                                                            │
   ┌────────────────────────────────────────────────────────┴──┐
-  │  build host only — AMD toolchain, node-locked licence      │
+  │  build host — AMD toolchain 2026.1 and a licence           │
   │                                                            │
   │  synth (one module, OOC) ──► resource + timing baseline     │
   │                                                            │
@@ -33,7 +33,7 @@ is [CONTEXT.md](../CONTEXT.md); the accelerators in it today are in
 ```
 
 The line across the middle is the one that matters. Everything above it is
-reproducible by anyone with Docker. Everything below needs the build host, its
+reproducible by anyone with Docker. Everything below needs the AMD toolchain, a
 licence and — for the last step — a board on a network segment CI cannot reach.
 `make regress` is exactly the part above the line, which is why CI runs it.
 

@@ -1,23 +1,29 @@
 #!/usr/bin/env bash
 # =============================================================================
-# Run a command inside the Vivado container on the build host.
+# Run a command inside the Vivado container.
+#
+# Optional: only for a host whose OS the AMD toolchain does not support. On a
+# supported OS, source settings64.sh and run make directly.
 #
 #   bash scripts/vivado-run.sh build          # build the image
 #   bash scripts/vivado-run.sh                # interactive shell
 #   bash scripts/vivado-run.sh make synth     # one-shot
-#   bash scripts/vivado-run.sh bash flows/embedded/gui.sh   # the GUI (see below)
+#   GUI=1 bash scripts/vivado-run.sh bash flows/embedded/gui.sh
 #
-# The toolchain is bind-mounted from the host rather than living in the image
-# (docs/adr/0001-...), and the host's X socket is shared so the GUI draws onto
-# the host desktop — which is what RustDesk mirrors (docs/adr/0002-...).
+# XILINX_ROOT    install prefix on the host (required; mounted read-only)
+# LICENSE_FILE   AMD licence file (default ~/.Xilinx/Xilinx.lic)
+# VIVADO_HOME    the container's $HOME, kept between runs
+#                (default ${XDG_DATA_HOME:-~/.local/share}/zynq-rtl-flow/vivado-home)
+# GUI=1          share the host's X socket (docs/adr/0002-...)
+# HOST_NET       1/0 forces the host's network on/off; unset, it is on only for
+#                a node-locked licence. Also needed to reach a board on a
+#                private segment behind this host (docs/adr/0003-...)
 # =============================================================================
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 IMAGE="${IMAGE:-zynq-rtl-flow-vivado:latest}"
-XILINX_PREFIX="${XILINX_PREFIX:-/home/ubuntu/disk/lab/xilinx}"
-
 # The lab's /etc/bash.bashrc aliases docker to podman for anyone outside the
 # docker group, but an alias does not reach a script: without this, such a user
 # gets "permission denied" on the docker socket instead of their own podman.
@@ -45,9 +51,8 @@ if [[ "${1:-}" == "build" ]]; then
        --target vivado -t "$IMAGE" "$ROOT"
 fi
 
-if [[ ! -d "$XILINX_PREFIX" ]]; then
-  echo "vivado-run: no toolchain at $XILINX_PREFIX" >&2
-  echo "            run: bash scripts/provision-vivado.sh" >&2
+if [[ -z "${XILINX_ROOT:-}" || ! -d "$XILINX_ROOT" ]]; then
+  echo "vivado-run: set XILINX_ROOT to the AMD toolchain's install prefix" >&2
   exit 2
 fi
 
@@ -56,13 +61,8 @@ fi
 # baked in at install time. Mount it anywhere else and sourcing fails with a
 # "No such file or directory" naming a path that plainly exists on the host.
 args=(--rm -v "$ROOT":/workspace -w /workspace
-      -v "$XILINX_PREFIX":"$XILINX_PREFIX":ro
-      -e "XILINX_ROOT=$XILINX_PREFIX")
-
-# Host networking: the KV260 sits on a private segment behind this host's second
-# NIC (docs/adr/0003-...), so the container needs the host's routing table to
-# reach it. It also spares us mapping any ports for hw_server.
-args+=(--network host)
+      -v "$XILINX_ROOT":"$XILINX_ROOT":ro
+      -e "XILINX_ROOT=$XILINX_ROOT")
 
 # Rootless podman maps the image's user onto a subordinate UID unless told to
 # keep the caller's, and the bind-mounted workspace is then read-only to it.
@@ -72,40 +72,50 @@ if [[ "$(basename "$DOCKER")" == podman ]]; then
   args+=(--userns=keep-id --user "$(id -u):$(id -g)")
 fi
 
-# The GUI draws on the host's display. The X server runs with -nolisten tcp, so
-# this is the unix socket and nothing else; xhost is what lets the container's
-# user through, and it is a deliberate concession (docs/adr/0002-...).
-if [[ -n "${DISPLAY:-}" && -d /tmp/.X11-unix ]]; then
+# The X server runs with -nolisten tcp, so this is the unix socket and nothing
+# else; xhost is what lets the container's user through (docs/adr/0002-...).
+if [[ "${GUI:-0}" == 1 ]]; then
+  if [[ -z "${DISPLAY:-}" || ! -d /tmp/.X11-unix ]]; then
+    echo "vivado-run: GUI=1 but there is no X display to share" >&2
+    exit 2
+  fi
   args+=(-v /tmp/.X11-unix:/tmp/.X11-unix -e "DISPLAY=$DISPLAY")
   if command -v xhost >/dev/null 2>&1; then
     xhost +local: >/dev/null 2>&1 || \
       echo ">> warning: xhost failed; the GUI will not be able to open a window" >&2
   fi
-else
-  echo ">> no DISPLAY — running without GUI support" >&2
 fi
 
-# Vivado writes licence and preference state under $HOME; keep it on the host so
-# it survives the container, and out of the workspace so it never reaches git.
-# The shared one belongs to whoever installed the toolchain; anyone else keeps
-# their own, since Vivado will not start with a $HOME it cannot write to.
-VIVADO_HOME="${VIVADO_HOME:-$XILINX_PREFIX/.home}"
-if [[ ! -w "$VIVADO_HOME" ]]; then
-  VIVADO_HOME="${XDG_DATA_HOME:-$HOME/.local/share}/zynq-rtl-flow/vivado-home"
-fi
-mkdir -p "$VIVADO_HOME/.Xilinx"
+# Vivado writes preference and project state under $HOME; keep it on the host so
+# it survives the container, outside the workspace so it never reaches git, and
+# outside the toolchain, which is the user's and may be shared or read-only.
+VIVADO_HOME="${VIVADO_HOME:-${XDG_DATA_HOME:-$HOME/.local/share}/zynq-rtl-flow/vivado-home}"
+mkdir -p "$VIVADO_HOME"
 args+=(-v "$VIVADO_HOME":/home/dev -e HOME=/home/dev)
 
 # From 2026.1 Vivado refuses to launch without a licence, free tier included.
-# Pointed at explicitly rather than relying on the default search: the default
-# depends on $HOME resolving the way we expect inside the container, and a
-# licence that is merely *not found* fails identically to one that does not
-# cover the part — which is the harder question to be debugging.
-LICENSE_FILE="${LICENSE_FILE:-$XILINX_PREFIX/.home/.Xilinx/Xilinx.lic}"
+# Pointed at explicitly: a licence that is merely *not found* fails identically
+# to one that does not cover the part, which is the harder question to debug.
+LICENSE_FILE="${LICENSE_FILE:-$HOME/.Xilinx/Xilinx.lic}"
+node_locked=0
 if [[ -f "$LICENSE_FILE" ]]; then
-  args+=(-e "XILINXD_LICENSE_FILE=$LICENSE_FILE")
+  args+=(-v "$LICENSE_FILE":/licence/Xilinx.lic:ro
+         -e XILINXD_LICENSE_FILE=/licence/Xilinx.lic)
+  if grep -oE 'HOSTID=[^[:space:];]+' "$LICENSE_FILE" | grep -qviE '=(ANY|DEMO)$'; then
+    node_locked=1
+  fi
 else
   echo ">> warning: no licence at $LICENSE_FILE — Vivado will refuse to start" >&2
+fi
+
+# A node-locked licence names the host's NIC by its MAC. In a container with its
+# own network namespace that NIC is not there, and FlexLM does not report a
+# host mismatch: Vivado segfaults inside the licence checkout before printing
+# anything about licensing.
+if [[ "${HOST_NET:-$node_locked}" == 1 ]]; then
+  args+=(--network host)
+elif (( node_locked )); then
+  echo ">> warning: HOST_NET=0 with a node-locked licence — Vivado will crash at licence checkout" >&2
 fi
 
 if [[ -t 0 ]]; then args+=(-it); fi

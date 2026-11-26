@@ -16,8 +16,10 @@ Commands assume the toolchain image / Dev Container (tools on PATH). From a host
 shell, use the docker/podman run wrapper from the README: `--user "$(id -u):$(id -g)"`
 on docker, `--userns=keep-id` on rootless podman, so `sim/` stays user-owned.
 
-Simulation targets run in the toolchain image. **Synthesis targets run in a
-different container, on one machine only** — see [Two containers](#two-containers-and-which-is-which).
+Simulation targets run in the toolchain image. **Synthesis targets run against
+the user's own AMD toolchain** — sourced `settings64.sh` (`XILINX_VIVADO` /
+`XILINX_VITIS`) or `XILINX_ROOT=<prefix>`; there is no default path
+(ADR-0009). See [Two containers](#two-containers-and-which-is-which).
 
 ```bash
 make lint          # Verilator --lint-only -Wall + verible-verilog-lint
@@ -39,7 +41,7 @@ make boot          # FSBL + PMU firmware + device tree from the handoff
 make overlay       # bitstream + device tree overlay -> build/<board>/overlay/<app>/
 make hls           # Vitis HLS kernel -> .xo  (KERNEL=)
 make xclbin        # v++ link -> .xclbin
-make vivado-image  # build the Vivado container (run on the build host)
+make vivado-image  # build the optional Vivado container (unsupported host OS only)
 make vivado-shell  # shell inside it
 ```
 
@@ -48,13 +50,14 @@ make vivado-shell  # shell inside it
 | | Toolchain image | Vivado image |
 |---|---|---|
 | Dockerfile | `docker/Dockerfile`, stage `runtime` | `docker/Dockerfile`, stage `vivado` (`FROM runtime`, ADR-0008) |
-| Contains | Verilator/cocotb/Verible, self-contained | the toolchain image plus AMD toolchain *runtime deps only*; the toolchain is bind-mounted from the build host's persistent disk |
+| Contains | Verilator/cocotb/Verible, self-contained | the toolchain image plus AMD toolchain *runtime deps only*; the user's install is bind-mounted from `XILINX_ROOT` |
 | Published | GHCR; used by CI and the Dev Container | never pushed, never used by CI |
-| Runs | anywhere — everything under `make sim` | only on the **build host** (`RTXWS`) |
+| Runs | anywhere — everything under `make sim` | optional; needed only where the host OS is one 2026.1 does not support (the maintainer's `RTXWS` is Ubuntu 20.04) |
 
 The toolchain is not in the Vivado image because a 100 GB image would sit on a
-258 GB partition shared with other people's services (ADR-0001). `make synth` on
-any other machine fails with a message saying so.
+258 GB partition shared with other people's services (ADR-0001). The repo does
+not install the toolchain either: that is AMD's installer's job (ADR-0009).
+`make synth` with no toolchain set up fails saying how to point at one.
 
 **Keep the two images separate.** Adding Vivado to the toolchain image would make
 every CI lint/sim run pull tens of GB; only the `runtime` stage is published.
@@ -109,7 +112,7 @@ xclbin work", the actual task is the missing kernel, not the script.
   `relu.c` are one register map each. Three `.ko`s, built on the board.
   `run-tile.py` checks either one against `tb/model/`.
 - `docker/Dockerfile` — multi-stage; Verilator built from source. Stage `vivado`
-  adds the AMD toolchain runtime deps (toolchain itself is mounted).
+  adds the AMD toolchain runtime deps (the user's toolchain is mounted); optional.
 - `.devcontainer/devcontainer.json` — consumes the GHCR image (the local `build`
   block is commented out; building needs ~8 GB RAM). Engine-agnostic: Dev
   Containers adds `--userns=keep-id` itself under podman, so podman-specific
@@ -120,7 +123,7 @@ xclbin work", the actual task is the missing kernel, not the script.
 
 | Tool | Version |
 |---|---|
-| Vivado / Vitis | **2026.1** (build host only) |
+| Vivado / Vitis | **2026.1** (user-installed) |
 | Verilator | **v5.042** |
 | cocotb | **2.x** |
 | cocotbext-axi | **0.1.25+** |
@@ -190,9 +193,10 @@ Each entry: **symptom** → cause → what the repo does about it.
 - **Shared-library error at startup** → Vivado links against `libtinfo.so.5`,
   which Ubuntu dropped after 20.04. The Vivado image symlinks it to
   `libtinfo.so.6`. The error looks nothing like a missing-package problem.
-- **The build host runs Ubuntu 20.04, which Vivado 2026.1 does not support** (it
-  wants 22.04.x or 24.04.x). This works *only because* the tools run in a 24.04
-  container. Keep Vivado in the container; running it on the host breaks.
+- **The maintainer's build host runs Ubuntu 20.04, which Vivado 2026.1 does not
+  support** (it wants 22.04.x or 24.04.x). There it works *only because* the
+  tools run in the 24.04 Vivado container; running them on that host breaks. On
+  a supported OS the container is unnecessary.
 - **KV260 DPU example overlays are gone** → the 2026.1 migration of
   `kria-vitis-platforms` (PR #290) deleted smartcam, benchmark, aibox-reid,
   defect-detect and nlp-smartvision: sources, Makefile targets and `OVERLAY_LIST`.
@@ -363,3 +367,4 @@ vocabulary (permanent) and the example design's (goes when the example does).
 | 0006 | what the repo is for | the environment is the deliverable, the accelerator its first example — partially supersedes 0004, corrects 0005's alternatives |
 | 0007 | what the repo is for | rename to zynq-rtl-flow — supersedes 0006's decision to keep the old name |
 | 0008 | synthesis environment | the Vivado image is the `vivado` stage of the dev image |
+| 0009 | synthesis environment | the AMD toolchain is the user's install; no provisioning script, no default path — partially supersedes 0001 |
