@@ -11,7 +11,8 @@
 #   GUI=1 bash scripts/vivado-run.sh bash flows/embedded/gui.sh
 #
 # XILINX_ROOT    install prefix on the host (required; mounted read-only)
-# LICENSE_FILE   AMD licence file (default ~/.Xilinx/Xilinx.lic)
+# LICENSE_FILE   AMD licence file (default ~/.Xilinx/Xilinx.lic, then
+#                $XILINXD_LICENSE_FILE if that is a file)
 # VIVADO_HOME    the container's $HOME, kept between runs
 #                (default ${XDG_DATA_HOME:-~/.local/share}/zynq-rtl-flow/vivado-home)
 # GUI=1          share the host's X socket (docs/adr/0002-...)
@@ -96,7 +97,14 @@ args+=(-v "$VIVADO_HOME":/home/dev -e HOME=/home/dev)
 # From 2026.1 Vivado refuses to launch without a licence, free tier included.
 # Pointed at explicitly: a licence that is merely *not found* fails identically
 # to one that does not cover the part, which is the harder question to debug.
-LICENSE_FILE="${LICENSE_FILE:-$HOME/.Xilinx/Xilinx.lic}"
+# A host-wide XILINXD_LICENSE_FILE is the fallback, used only when it names a
+# single file: a port@server or a list cannot be bind-mounted.
+if [[ -z "${LICENSE_FILE:-}" ]]; then
+  LICENSE_FILE="$HOME/.Xilinx/Xilinx.lic"
+  if [[ ! -f "$LICENSE_FILE" && -f "${XILINXD_LICENSE_FILE:-}" ]]; then
+    LICENSE_FILE="$XILINXD_LICENSE_FILE"
+  fi
+fi
 node_locked=0
 if [[ -f "$LICENSE_FILE" ]]; then
   args+=(-v "$LICENSE_FILE":/licence/Xilinx.lic:ro
