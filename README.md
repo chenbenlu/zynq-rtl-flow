@@ -256,7 +256,7 @@ scripts/    lint / format / regress / wave / sec + Vivado provisioning helpers;
 tests/      bash tests for scripts/ (make test-scripts)
 driver/     PS-side driver: a transport layer shared by every conforming
             accelerator, and one register layer per accelerator
-docker/     Dockerfile (simulation) + vivado.Dockerfile (synthesis)
+docker/     Dockerfile: runtime stage (simulation), vivado stage (synthesis)
 sim/        simulation artifacts, waveforms, coverage (gitignored)
 build/      synthesis + implementation artifacts (gitignored)
 docs/       accelerator contract, environment, example accelerators, one

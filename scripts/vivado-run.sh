@@ -30,10 +30,19 @@ if [[ -z "${DOCKER:-}" ]]; then
 fi
 
 if [[ "${1:-}" == "build" ]]; then
-  exec "$DOCKER" build -f "$ROOT/docker/vivado.Dockerfile" \
-       --build-arg USER_UID="$(id -u)" \
-       --build-arg USER_GID="$(id -g)" \
-       -t "$IMAGE" "$ROOT"
+  # Rootless podman needs neither a remapped dev user (--userns=keep-id below
+  # runs the container as the caller) nor could it build one: the caller's UID
+  # lies outside their own subordinate range. Its seccomp profile, from podman
+  # 3.x, predates fchmodat2 and answers it with EPERM rather than ENOSYS, so
+  # Ubuntu 24.04's glibc never falls back and every tar in the build fails
+  # with "Cannot change mode".
+  if [[ "$(basename "$DOCKER")" == podman ]]; then
+    build_args=(--security-opt seccomp=unconfined)
+  else
+    build_args=(--build-arg USER_UID="$(id -u)" --build-arg USER_GID="$(id -g)")
+  fi
+  exec "$DOCKER" build "${build_args[@]}" -f "$ROOT/docker/Dockerfile" \
+       --target vivado -t "$IMAGE" "$ROOT"
 fi
 
 if [[ ! -d "$XILINX_PREFIX" ]]; then
@@ -57,8 +66,10 @@ args+=(--network host)
 
 # Rootless podman maps the image's user onto a subordinate UID unless told to
 # keep the caller's, and the bind-mounted workspace is then read-only to it.
+# podman 3.x's keep-id still runs as the image's USER (dev, UID 1000), so the
+# caller's UID is also passed explicitly.
 if [[ "$(basename "$DOCKER")" == podman ]]; then
-  args+=(--userns=keep-id)
+  args+=(--userns=keep-id --user "$(id -u):$(id -g)")
 fi
 
 # The GUI draws on the host's display. The X server runs with -nolisten tcp, so
